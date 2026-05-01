@@ -259,8 +259,6 @@ const (
 )
  
 var (
-	levels = []string{"INFO", "WARN", "ERROR"}
- 
 	infoMessages = []string{
 		"Service started successfully",
 		"Configuration loaded from /etc/app/config.yaml",
@@ -321,6 +319,8 @@ var (
 	}
 )
 ```
+
+And you can use "INFO", "WARN", "ERROR" as 3 levels.
 ### 5. Expected Output
 ```
 Generating 7 log files (300 lines each)...
