@@ -7,30 +7,35 @@ import (
 	"os"
 )
 
-const BUFFER_SIZE = 1
+const BufferSize = 500
 
 func main() {
-	buffer := make([]byte, BUFFER_SIZE)
+	buffer := make([]byte, BufferSize)
 	f, err := os.Open("../README.md")
 	if err != nil {
 		log.Fatal(err)
 	}
 	defer f.Close()
-	total_bytes := 0
+
+	totalBytes := 0
 	content := ""
 
 	for {
-		read_byte, err := f.Read(buffer)
+		readBytes, err := f.Read(buffer)
+
+		// We must process these 2 lines first before checking EOF or err != nil
+		// execute this command "go doc io.Reader" to know more about the correct behavior
+		content += string(buffer[:readBytes])
+		totalBytes += readBytes
+
 		if err == io.EOF {
 			break
 		}
 		if err != nil {
 			log.Fatal(err)
 		}
-
-		content += string(buffer[:read_byte])
-		total_bytes += read_byte
 	}
+
 	fmt.Println(content)
-	fmt.Print(total_bytes)
+	fmt.Print(totalBytes)
 }

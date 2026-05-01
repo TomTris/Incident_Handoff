@@ -50,13 +50,13 @@ func printArea(s Shape) {
 	extra := ""
 	switch s.(type) {
 	case Circle:
-		extra = "(is a circle) "
+		extra = "(is a Circle) "
 	}
 	fmt.Printf("%s %s→ area: %.2f\n", s.Describe(), extra, s.Area())
 }
 
 func totalArea(shapes []Shape) float64 {
-	total := float64(0)
+	total := 0.0
 	for _, s := range shapes {
 		total += s.Area()
 	}

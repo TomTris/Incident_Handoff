@@ -3,18 +3,17 @@ package main
 import "os"
 
 // Enums using this way
-
-// best practice: create a type lie this before using iota as below
+// best practice: create a type like this before using iota as below
 type LogLevel int
 
 const (
-	INFO LogLevel = iota
+	INFO LogLevel = iota // iota means, first 0, then other 1, 2 ,,,
 	DEBUG
 	WARN
 	ERROR
 )
 
-// This is new. with this one, it's also 0,1,2,3
+// This is new. With this one, it's also 0,1,2,3
 var logLevelToStrings = []string{"INFO", "DEBUG", "WARN", "ERROR"}
 
 func RunApp(l Logger) {

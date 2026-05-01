@@ -237,8 +237,6 @@ Imagine you're on a platform team. An incident just happened and you need to sca
 
 This is a fan-out/fan-in pattern — one of the two most important concurrency patterns in Go. You'll see it in log processors, data pipelines, and CI/CD systems.
 
-For myself and 42er: This is the Go equivalent of running multiple shell pipelines at the same time in your minishell — except Go manages the "processes" (goroutines) for you, and channels replace your pipes.
-
 ### 2. Goal
 Build a concurrent log file scanner that processes multiple files simultaneously, collects all ERROR lines via a channel, and prints a final report.
 
@@ -246,6 +244,7 @@ Build a concurrent log file scanner that processes multiple files simultaneously
 - Generate 5 fake `.log` files at startup (100 lines each, random `INFO`/`WARN`/`ERROR`)
 - Launch one **goroutine per file** to scan it — fan-out
 - Each goroutine sends its result into a shared results channel — fan-in
+- A single collector goroutine reads from the channel and stores results
 - Use `sync.WaitGroup` to know when all workers are done
 - Close the channel after all goroutines finish
 - Print a sorted final report: errors per file + total errors found
@@ -269,7 +268,6 @@ log_4.log : 6 errors
 log_5.log : 4 errors
 Total     : 29 errors
 ```
-
 
 ### 5. Why This Matters in Production
 Fan-out/fan-in is the core of Go's concurrency model. It's used in:
