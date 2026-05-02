@@ -503,35 +503,105 @@ Knowing when to reach for a channel vs a mutex is what separates junior from mid
 ### `🟠 Intermediate`
 **🕐 Expected duration: 15–20 hours**
 
-### 1. Context
+### 0. Introduction
+
 In production, you never spawn unlimited goroutines. If 10,000 requests come in and you launch 10,000 goroutines to handle them simultaneously, your server runs out of memory. The solution: a **worker pool** — a fixed number of goroutines that pick jobs from a queue, process them, and stay alive for the next job.
 
 Worker pools are how Go HTTP servers, job queues (like Faktory, Asynq), and data processors work under the hood. This is the second of the two most important Go concurrency patterns.
 
+### 1. Context
+Your team runs 20 internal services. Every minute, an automated health checker pings each service's /health endpoint and reports which ones are down. The previous engineer wrote it in Python — it checks services one by one, sequentially. On a bad day with 6 timed-out services (each taking 4 seconds to timeout), it takes 24 seconds per cycle.
+Your job: rewrite it in Go using a **worker pool** with the **minimum number of workers possible**. All 20 services must be checked and complete within **7 seconds**, even on a bad day when 6 services time out. Under normal conditions (no timeouts or network delay), in avarage for each url, the checker should finish well under 500ms second.
+
 ### 2. Goal
-Build a URL health checker using a fixed worker pool of 5 goroutines that processes 20 URLs concurrently with timeout control.
+Build a URL health checker using a fixed worker pool of minimum number of goroutines possible that processes 20 URLs with timeout control.
 
 ### 3. Scope
-- Define exactly **5 worker goroutines** — no more, no less
-- Feed 20 URLs into a jobs channel (mix of valid/invalid/timeout URLs)
-- Each worker performs an HTTP GET with a **3-second timeout** using `context`
+- Define **minimun worker goroutines**
+- Feed 20 URLs as below as in this order into a jobs channel (mix of valid/invalid/timeout URLs)
+- Each worker performs an HTTP GET with a **4-second timeout** using `context`
 - Results sent to a results channel, printed as they arrive
 - Graceful handling: timeouts, unreachable hosts, invalid URLs
 - Print final summary: total success vs failed
 - Workers must stop cleanly when there are no more jobs
 
-### 4. Expected Output
-```
-[worker 2] ✅ https://google.com       → 200 OK    (121ms)
-[worker 1] ❌ https://notarealsite.xyz → timeout   (3001ms)
-...
+### 4. Given Variables & Structs
+```go
 
-=== SUMMARY ===
-✅ Success : 14
-❌ Failed  : 6
+var urls = []string{
+	"https://google.com",
+	"https://github.com",
+	"https://go.dev",
+	"https://pkg.go.dev",
+	"https://cloudflare.com",
+	"https://fastly.com",
+	"https://stackoverflow.com",
+	"https://reddit.com",
+	"https://news.ycombinator.com",
+	"https://gitlab.com",
+	"https://bitbucket.org",
+	"https://hub.docker.com",
+	"https://kubernetes.io",
+	"https://prometheus.io",
+	// 6 URLs that will timeout
+	"https://httpstat.us/200?sleep=10000",
+	"https://httpstat.us/200?sleep=15000",
+	"https://httpstat.us/200?sleep=20000",
+	"https://10.255.255.1",             // non-routable IP, hangs
+	"https://192.0.2.1",               // TEST-NET, hangs
+	"https://198.51.100.1",            // TEST-NET-2, hangs
+}
+
+type Job struct {
+    ID  int
+    URL string
+}
+
+type Result struct {
+	Job        Job
+	WorkerID   int
+	StatusCode int
+	Duration   time.Duration
+	Err        error
+}
 ```
 
-### 5. Why This Matters in Production
+### 5. Expected Output
+```
+[worker 4] 1  ✅ https://github.com           → 200 (130ms)
+[worker 2] 5  ✅ https://fastly.com           → 200 (191ms)
+[worker 6] 3  ✅ https://pkg.go.dev           → 200 (209ms)
+[worker 4] 6 ❌ https://stackoverflow.com    → 403 (80ms)
+[worker 3] 2  ✅ https://go.dev               → 200 (226ms)
+[worker 1] 0  ✅ https://google.com           → 200 (249ms)
+[worker 5] 4  ✅ https://cloudflare.com       → 200 (364ms)
+[worker 3] 10 ✅ https://bitbucket.org        → 200 (144ms)
+[worker 1] 11 ✅ https://hub.docker.com       → 200 (189ms)
+[worker 5] 12 ✅ https://kubernetes.io        → 200 (101ms)
+[worker 3] 13 ✅ https://prometheus.io        → 200 (99ms)
+[worker 2] 7  ✅ https://reddit.com           → 200 (332ms)
+[worker 4] 9  ✅ https://gitlab.com           → 200 (467ms)
+[worker 6] 8  ✅ https://news.ycombinator.com → 200 (666ms)
+[worker 1] 14 ❌ https://10.255.255.1         → Get "https://10.255.255.1": context deadline exceeded (4001ms)
+[worker 5] 15 ❌ https://10.255.255.2         → Get "https://10.255.255.2": context deadline exceeded (4001ms)
+[worker 3] 16 ❌ https://10.255.255.3         → Get "https://10.255.255.3": context deadline exceeded (4000ms)
+[worker 2] 17 ❌ https://10.255.255.1         → Get "https://10.255.255.1": context deadline exceeded (4001ms)
+[worker 4] 18 ❌ https://192.0.2.1            → Get "https://192.0.2.1": context deadline exceeded (4001ms)
+[worker 6] 19 ❌ https://198.51.100.1         → Get "https://198.51.100.1": context deadline exceeded (4001ms)
+
+══════════════════════════════════════════════════
+                      SUMMARY
+══════════════════════════════════════════════════
+ ✅  Healthy  (2xx)   :  13
+ ❌  Unreachable      :  7
+──────────────────────────────────────────────────
+ Total                :  20
+ Fastest              :  https://stackoverflow.com (80ms)
+ Slowest (healthy)    :  https://news.ycombinator.com (666ms)
+ Total runtime        :  4877ms
+```
+
+### 6. Why This Matters in Production
 Worker pools are used everywhere:
 - **Payment processors** — exactly N workers process transactions to avoid overloading downstream APIs
 - **Web crawlers** — N goroutines fetch pages, respecting rate limits
@@ -540,19 +610,12 @@ Worker pools are used everywhere:
 
 Knowing when to use a worker pool vs fan-out is a key advanced Go topic.
 
-### 6. Common Mistakes to Avoid
+### 7. Common Mistakes to Avoid
 - Not closing the jobs channel — workers loop forever waiting for jobs that never come (goroutine leak)
 - Closing the results channel from a worker goroutine — if multiple workers do this, panic
 - Not using `context` for timeouts — HTTP requests can hang forever without it
 - Using `time.Sleep` for timeouts instead of `context.WithTimeout` — never do this
-- Sharing the HTTP client between goroutines without knowing it's safe (it is — `http.Client` is safe for concurrent use)
-
-### 7. What a Senior Would Do Differently
-- Parameterize pool size and pass it via config or environment variable
-- Use `errgroup` with a semaphore instead of explicit channels
-- Add retry logic with exponential backoff for transient failures
-- Export metrics (success rate, p95 latency) to Prometheus
-- Use `http.Client` with a custom `Transport` for connection pooling tuning
+- Do not close response body after a successful request
 
 ### 8. Hints & Knowledge
 - `context.WithTimeout(context.Background(), 3*time.Second)` — cancels after 3s
