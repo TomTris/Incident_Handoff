@@ -9,7 +9,7 @@ func getRouter(incHandler IncidentHandler) http.Handler {
 	mux.HandleFunc("GET /incidents/{id}", incHandler.GetIncident)
 	mux.HandleFunc("GET /incidents", incHandler.ListIncidents)
 	// mux.HandleFunc("GET /incidents/{id}/handoff", listHandoff)
-	// mux.HandleFunc("GET /healthz", healthCheck)
+	mux.HandleFunc("GET /healthz", healthCheck)
 	// mux.HandleFunc("PATCH /incidents", UpdateOneIncident)
 	router := RequestIDMiddleware(LoggingMiddleware(CORSMiddleware(mux)))
 	return router
