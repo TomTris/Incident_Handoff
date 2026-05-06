@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"sort"
 	"strconv"
 	"time"
 )
@@ -47,8 +48,24 @@ func (m *MemoryStore) AddEntry(ctx context.Context, incidentID string, entry Tim
 	return entry, nil
 }
 
-// func listAllIncidents(w http.ResponseWriter, r *http.Request) {
-// 	w.Header().Set("Content-Type", "allication/json")
-// 	w.WriteHeader(http.StatusOK)
-// 	json.NewEncoder(w).Encode(incidents)
-// }
+func (m *MemoryStore) ListIncidents(ctx context.Context, filter IncidentFilter) ([]Incident, error) {
+	isServiceMatch := func(incident Incident, filter IncidentFilter) bool {
+		return filter.Service == "" || filter.Service == incident.Service
+	}
+	isStatusMatch := func(incident Incident, filter IncidentFilter) bool {
+		return filter.Status == "" ||
+			(filter.Status == "active" && incident.Status != RESOLVED) ||
+			filter.Status == incident.Status
+	}
+
+	array := []Incident{}
+	for _, incident := range m.incidents {
+		if isServiceMatch(incident, filter) && isStatusMatch(incident, filter) {
+			array = append(array, incident)
+		}
+	}
+	sort.Slice(array, func(i, j int) bool {
+		return array[i].CreatedAt.Sub(array[j].CreatedAt) < 0
+	})
+	return array, nil
+}

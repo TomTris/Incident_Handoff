@@ -15,6 +15,16 @@ const (
 	RESOLVED      = "resolved"
 )
 
+var IncidentStatus = map[string]bool{
+	TRIGGERED:     true,
+	ACKNOWLEDGED:  true,
+	INVESTIGATING: true,
+	MITIGATED:     true,
+	RESOLVED:      true,
+	"active":      true,
+	"":            true,
+}
+
 // Entry type
 const (
 	OBSERVATION   = "observation"
@@ -23,6 +33,14 @@ const (
 	OPEN_QUESTION = "open_question"
 	STATE_CHANGE  = "state_change"
 )
+
+var validEntryTypes = map[string]bool{
+	OBSERVATION:   true,
+	ACTION:        true,
+	DISCOVERY:     true,
+	OPEN_QUESTION: true,
+	STATE_CHANGE:  true,
+}
 
 const requestIDKey = "request_id"
 const incidentIDPrefix = "inc-"

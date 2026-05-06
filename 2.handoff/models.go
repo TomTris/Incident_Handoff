@@ -28,14 +28,6 @@ type TimelineEntry struct {
 }
 
 func (c *TimelineEntry) Validate() error {
-	var validEntryTypes = map[string]bool{
-		OBSERVATION:   true,
-		ACTION:        true,
-		DISCOVERY:     true,
-		OPEN_QUESTION: true,
-		STATE_CHANGE:  true,
-	}
-
 	if strings.Trim(c.Author, " ") == "" {
 		return errors.New("Request doesn't contain Author")
 	}
@@ -44,6 +36,18 @@ func (c *TimelineEntry) Validate() error {
 	}
 	if strings.Trim(c.Text, " ") == "" {
 		return errors.New("Request doesn't contain text")
+	}
+	return nil
+}
+
+type IncidentFilter struct {
+	Status  string
+	Service string
+}
+
+func (f *IncidentFilter) Validate() error {
+	if IncidentStatus[strings.Trim(f.Status, " ")] == false {
+		return errors.New("Invalid Incident status")
 	}
 	return nil
 }
