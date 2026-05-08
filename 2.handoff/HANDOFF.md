@@ -1,6 +1,6 @@
 # PART 2 — Backend Service (Phases 5–9)
 
-This track builds Handoff's backend: a production-grade Go API with PostgreSQL, WebSocket, authentication, observability, and feature flags. By the end, the backend is complete, tested, and instrumented.
+This track builds Handoff's backend: a production-grade Go API with database persistence, WebSocket, authentication, observability, and feature flags. By the end, the backend is complete, tested, and instrumented.
 
 ---
 
@@ -27,7 +27,7 @@ Build a complete REST API for Handoff using Go's `net/http` standard library, wi
 
 ### 3. Scope
 
-**Data model (in-memory for now — Phase 6 adds PostgreSQL):**
+**Data model (in-memory for now — Phase 6 adds database persistence):**
 
 ```go
 type Incident struct {
@@ -37,7 +37,7 @@ type Incident struct {
     Severity    string          `json:"severity"`    // SEV1, SEV2, SEV3
     Status      string          `json:"status"`      // triggered, acknowledged, investigating, mitigated, resolved
     OpenedBy    string          `json:"opened_by"`
-    OnCall      string          `json:"on_call"`
+    OnCall      string          `json:"on_call"`     // Default: set to OpenedBy on creation
     CreatedAt   time.Time       `json:"created_at"`
     UpdatedAt   time.Time       `json:"updated_at"`
     Entries     []TimelineEntry `json:"entries"`
@@ -60,7 +60,7 @@ type TimelineEntry struct {
 | `GET` | `/incidents` | List all incidents (filter: `?status=active&service=order-service`) |
 | `GET` | `/incidents/:id` | Get one incident with full timeline |
 | `POST` | `/incidents/:id/entries` | Add a timeline entry |
-| `PATCH` | `/incidents/:id` | Update severity, status or on call|
+| `PATCH` | `/incidents/:id` | Update severity, status or on call |
 | `GET` | `/incidents/:id/handoff` | Auto-generated handoff brief |
 | `GET` | `/healthz` | Health check (returns 200 + `{"status":"ok"}`) |
 
@@ -146,7 +146,7 @@ type Store interface {
     AddEntry(ctx context.Context, incidentID string, entry TimelineEntry) error
 }
 ```
-Implement `MemoryStore` using `sync.RWMutex` + `map[string]Incident`. The interface exists so Phase 6 can swap in `PostgresStore` without changing any handler code. This is the same interface-driven design from Phase 2 — now used for real.
+Implement `MemoryStore` using `sync.RWMutex` + `map[string]Incident`. The interface exists so Phase 6 can swap in a database-backed store without changing any handler code. This is the same interface-driven design from Phase 2 — now used for real.
 
 **Project structure:**
 ```
@@ -165,6 +165,7 @@ handoff/
 ```
 
 You can add more files if needed.
+
 ### 4. Expected Output
 
 ```bash
@@ -285,7 +286,7 @@ $ curl -s http://localhost:8080/incidents/inc-999 | jq .
 # PHASE 5.Test — Go Testing Fundamentals
 
 > **Why this phase matters**
-> You've just built your first production Go service. It works — you tested it manually with `curl`. But manual testing doesn't scale. When you add PostgreSQL in Phase 6, WebSocket in Phase 7, and auth in Phase 9, how do you know Phase 5's handlers still work? You don't — unless you have automated tests. This phase introduces Go testing while Phase 5's code is fresh in your memory. From here forward, you're expected to write tests alongside your code in every phase.
+> You've just built your first production Go service. It works — you tested it manually with `curl`. But manual testing doesn't scale. When you add a database in Phase 6, WebSocket in Phase 7, and auth in Phase 9, how do you know Phase 5's handlers still work? You don't — unless you have automated tests. This phase introduces Go testing while Phase 5's code is fresh in your memory. From here forward, you're expected to write tests alongside your code in every phase.
 
 ---
 
@@ -410,10 +411,9 @@ go test ./... -cover      # with coverage percentage
 ```
 [ ] go test ./... — all tests pass
 [ ] go test -race ./... — zero race conditions
-[ ] go test -cover ./... — >60% coverage on handler and validation code
+[ ] go test -cover ./... — >75% coverage on handler and validation code
 [ ] Table-driven tests for all validation functions
 [ ] httptest tests for at least 5 handler cases (mix of success and error)
-
 ```
 
 ### 8. Knowledge Gained
@@ -430,14 +430,34 @@ go test ./... -cover      # with coverage percentage
 
 ---
 
-# PHASE 6 — PostgreSQL Integration
+# Database Choice
 
-> **Why this phase matters**
-> In-memory stores disappear when the process restarts. Every production service persists data in a database — most commonly PostgreSQL. Go's `database/sql` package provides the interface; `pgx` is the production-standard driver. Connection pooling, migrations, and parameterized queries (SQL injection prevention) are non-negotiable skills. After this phase, Handoff survives restarts and can scale to multiple API instances reading and writing simultaneously.
+Before Phase 6, you must choose a database. This is a real engineering decision with real tradeoffs. Understand them before you commit.
+
+**Three viable options for Handoff:**
+
+| Database | Model | Strengths for Handoff | Weaknesses for Handoff |
+|---|---|---|---|
+| **PostgreSQL** | Relational (tables, rows, SQL) | Strongest data integrity — foreign keys enforce relationships between engineers, incidents, and entries. Powerful query language. `LISTEN/NOTIFY` provides built-in pub/sub for real-time updates. Best technical fit for Handoff's relational data. | Requires learning SQL. Requires schema migrations when the data model changes. The Incident struct with embedded entries needs to be split into two tables (incidents + entries) joined by foreign key. |
+| **MongoDB** | Document (JSON-like documents, no schema) | The Incident struct from Phase 5 — with its embedded `[]TimelineEntry` — maps directly to a database document without restructuring. No SQL, no migrations, no ORM. Lowest barrier to start. | Relationships between entities (who is on-call for which incident) must be managed in application code, not the database. No referential integrity enforcement. Aggregation pipelines are less expressive than SQL for complex queries. |
+| **SQLite** | Relational (embedded, file-based) | Zero infrastructure — no separate database process, no Docker service, just a file on disk. Full SQL support. Good for learning relational concepts without operational overhead. | Single-writer only — concurrent writes serialize through a single lock. Cannot run multiple API instances against the same database. No built-in real-time notification mechanism. Not viable for the multi-replica deployment in Phase 14. |
+
+**Research your choice.** Read the Go driver documentation. Understand how your database handles: creating records, querying with filters, updating specific fields without overwriting the rest, and appending to a list. Phase 6 will ask you to implement these operations — the curriculum describes *what* each operation must accomplish, not *how* your specific database does it.
+
+**This curriculum uses MongoDB.** The Incident struct from Phase 5 drops into MongoDB as-is — no table design, no foreign keys, no SQL. For someone learning Go, Vue, WebSocket, auth, metrics, Docker, and CI/CD simultaneously, removing the database restructuring step reduces cognitive load where it matters least. MongoDB is also a database I need professionally. That said, PostgreSQL is a stronger technical fit for Handoff's data model. The relationships between engineers, incidents, and handoffs are inherently relational. MongoDB pushes referential integrity into application code that PostgreSQL enforces at the database level. I chose convenience and career alignment over optimal data modeling. Know that tradeoff before you follow the same path.
+
+If you choose a different database than this curriculum uses, every phase still works — the `Store` interface from Phase 5 is the abstraction boundary. Your handlers don't know or care what database sits behind it. You will need to translate the database-specific research on your own: find the Go driver, learn its API, map the requirements to your database's operations. That translation work is itself a valuable skill.
 
 ---
 
-## Challenge 6.1 — Replace the In-Memory Store with PostgreSQL
+# PHASE 6 — Database Integration
+
+> **Why this phase matters**
+> In-memory stores disappear when the process restarts. Every production service persists data in a database. After this phase, Handoff survives restarts and can scale to multiple API instances sharing the same data — a requirement when Kubernetes runs more than one replica. The `Store` interface from Phase 5 pays off here: you implement a new store backed by a real database, swap it in, and zero handler code changes.
+
+---
+
+## Challenge 6.1 — Replace the In-Memory Store with a Database
 ### `🟠 Intermediate`
 **🕐 Expected duration: 15–20 hours**
 
@@ -445,111 +465,55 @@ go test ./... -cover      # with coverage percentage
 
 Your Handoff API works — but all data lives in a `map` behind a mutex. Restart the server and everything is gone. In production, incident data is critical. It must survive restarts, be queryable across multiple service instances, and support concurrent access from many clients.
 
-This challenge connects Go to PostgreSQL using `pgx` — the most performant Go PostgreSQL driver — and implements the same `Store` interface from Phase 5 backed by real SQL.
+This challenge connects Go to your chosen database using its official Go driver and implements the same `Store` interface from Phase 5 backed by real persistence.
 
 ### 2. Goal
 
-Implement `PostgresStore` satisfying the `Store` interface from Phase 5. Add schema migrations, connection pooling, and transactional writes. Zero handler changes.
+Implement a database-backed store satisfying the `Store` interface from Phase 5. Add schema/index management, connection handling, and efficient writes. Zero handler changes.
 
 ### 3. Scope
 
-**Schema:**
+**Data mapping:**
 
-```sql
--- migrations/001_create_incidents.sql
-CREATE TABLE incidents (
-    id          TEXT PRIMARY KEY,
-    title       TEXT NOT NULL,
-    service     TEXT NOT NULL,
-    severity    TEXT NOT NULL CHECK (severity IN ('SEV1','SEV2','SEV3')),
-    status      TEXT NOT NULL CHECK (status IN ('triggered','acknowledged','investigating','mitigated','resolved')),
-    opened_by   TEXT NOT NULL,
-    on_call     TEXT NOT NULL,
-    created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
-    updated_at  TIMESTAMPTZ NOT NULL DEFAULT now()
-);
+Design how will you map data with your database choice.
 
--- migrations/002_create_entries.sql
-CREATE TABLE timeline_entries (
-    id           TEXT PRIMARY KEY,
-    incident_id  TEXT NOT NULL REFERENCES incidents(id),
-    time         TIMESTAMPTZ NOT NULL DEFAULT now(),
-    author       TEXT NOT NULL,
-    type         TEXT NOT NULL CHECK (type IN ('observation','action','discovery','open_question','state_change')),
-    text         TEXT NOT NULL
-);
+**Serialization tags:**
 
-CREATE INDEX idx_entries_incident ON timeline_entries(incident_id);
-```
+Your Go structs have `json:"..."` tags for HTTP serialization. Your database driver likely needs its own tags to control how fields are named in the database. Without them, field names may not match what you expect.
 
-**Migration runner:**
+- MongoDB: add `bson:"..."` tags
+- PostgreSQL/SQLite with raw SQL: tags may not be needed if you map fields explicitly in queries
+- PostgreSQL with sqlc or similar: follow the tool's conventions
 
-Build a simple migration runner that:
-- Reads `.sql` files from `./migrations/` in alphabetical order
-- Tracks applied migrations in a `schema_migrations` table
-- Runs on server startup, before accepting HTTP traffic
-- Skips already-applied migrations
-- Logs each migration applied
+Update your model structs in `models.go` to include whatever tags your database driver requires alongside the existing JSON tags.
 
-Do NOT use an ORM. Do NOT use a migration framework like `goose` or `golang-migrate`. Write raw SQL and a simple runner. This is how you learn what those tools abstract away.
+**Initialize your database:** Your database needs to be ready before the API starts accepting traffic. Build an initialization function. Run it in `main.go` during startup.
 
-**PostgresStore implementation:**
+**Store implementation:** Create your database store file (e.g., `store_db.go`) implementing the `Store` interface.
 
-- `store_postgres.go` — implements `Store` interface using `pgxpool`
-- Connection pool: `pgxpool.New(ctx, connString)` — reads `DATABASE_URL` from environment
-- All queries use parameterized placeholders (`$1`, `$2`) — never string concatenation
-- `GetIncident` fetches the incident and its entries (two queries, or one with a JOIN — your design choice, but explain the trade-off in a code comment)
-- `ListIncidents` with filters: build the WHERE clause dynamically using parameterized queries
-- `CreateIncident` uses a transaction when an incident is created with initial entries — both succeed or both fail
-
-**Config update:**
-```go
-type Config struct {
-    Port        string // HANDOFF_PORT
-    LogLevel    string // HANDOFF_LOG_LEVEL
-    Environment string // HANDOFF_ENV
-    DatabaseURL string // DATABASE_URL
-}
-```
+**Connection and configuration:** Add a database connection string to your `Config` struct, reading from an environment variable (e.g., `DATABASE_URL` or `MONGODB_URI`). Most database drivers manage connection pooling internally.
 
 **Docker Compose for local development:**
-```yaml
-services:
-  db:
-    image: postgres:16-alpine
-    environment:
-      POSTGRES_DB: handoff
-      POSTGRES_USER: handoff
-      POSTGRES_PASSWORD: handoff
-    ports:
-      - "5432:5432"
-    volumes:
-      - pgdata:/var/lib/postgresql/data
 
-volumes:
-  pgdata:
-```
+Add your database as a service in `docker-compose.yml`:
+- Use the official Docker image for your database
+- Expose the default port
+- Persist data with a named volume
+- Add a health check so dependent services wait for the database to be ready
 
-Run `docker compose up db` to start PostgreSQL locally. Your Go server connects to it via `DATABASE_URL`.
+Run `docker compose up db` to start your database locally.
 
 **Store swap in main.go:**
-```go
-var store Store
-if cfg.DatabaseURL != "" {
-    store = NewPostgresStore(ctx, cfg.DatabaseURL)
-} else {
-    store = NewMemoryStore()
-}
-```
-This is the payoff of the interface design from Phase 5. Zero handler changes. The entire persistence layer swaps with one line.
+
+The payoff of the interface design from Phase 5: if the database connection string is set, create the database-backed store. If not, fall back to `MemoryStore`. Zero handler changes. One conditional decides the persistence layer.
 
 ### 4. Expected Output
 
 ```bash
 $ docker compose up db -d
-$ DATABASE_URL="postgres://handoff:handoff@localhost:5432/handoff?sslmode=disable" go run .
-2026-05-12T10:00:00Z INF running migrations applied=2
-2026-05-12T10:00:00Z INF server starting port=8080 store=postgres
+$ DATABASE_URL="<your-connection-string>" go run .
+2026-05-12T10:00:00Z INF schema/indexes ensured
+2026-05-12T10:00:00Z INF server starting port=8080 store=database
 
 # Same curl commands as Phase 5 — identical responses.
 # Restart the server. Data survives.
@@ -560,53 +524,82 @@ $ curl -s http://localhost:8080/incidents | jq '.[] | .title'
 
 ### 5. Hints & Knowledge
 
-- `pgxpool.New(ctx, os.Getenv("DATABASE_URL"))` — creates a connection pool. Pool size is auto-configured based on system resources.
-- `pool.QueryRow(ctx, "SELECT ... WHERE id=$1", id).Scan(&field1, &field2)` — parameterized query. `$1` prevents SQL injection.
-- `pool.Begin(ctx)` returns a `pgx.Tx` — call `tx.Commit()` on success, `tx.Rollback()` on failure. Use `defer tx.Rollback()` immediately — it's a no-op after commit.
-- `pgx.ErrNoRows` — returned when a query matches nothing. Check this to return 404 from your handler.
-- `TIMESTAMPTZ` stores timestamps with timezone in UTC. Always use this, never `TIMESTAMP` without timezone.
-- `CREATE INDEX` on `incident_id` in the entries table — without it, fetching an incident's timeline does a full table scan.
-- Two queries vs JOIN for GetIncident: two queries are simpler and avoid duplicating incident data across rows. A JOIN is one round-trip but requires post-processing to group entries. For this scale, two queries is fine.
+**General:**
+- Read your database driver's official documentation before writing code. Understand: how to connect, how to insert, how to query with filters, how to update specific fields, and how to handle "not found."
+- `context.Context` — pass it through every database call. This enables query cancellation when HTTP requests are cancelled.
+- Connection pooling is usually handled by the driver. You don't create a separate pool.
+
+**If you chose MongoDB:**
+- Driver: `go get go.mongodb.org/mongo-driver/v2`
+- `bson.M` for unordered maps (filters, updates). `bson.D` for ordered maps (index keys where field order matters).
+- `mongo.ErrNoDocuments` — the error returned when `FindOne` matches nothing.
+- You need at least two update operators: one for setting specific fields, one for appending to an array. Read https://www.mongodb.com/docs/manual/reference/operator/update/
+- `cursor.Close(ctx)` — always defer this after `Find()`.
+- Configure your local MongoDB as a single-node replica set (add `--replSet rs0` to the Docker command). This is functionally identical to standalone but enables Change Streams and transactions if needed in later phases.
+
+**If you chose PostgreSQL:**
+- Driver: `go get github.com/jackc/pgx/v5` (recommended) or `database/sql` with `lib/pq`.
+- Consider `sqlc` (`go install github.com/sqlc-dev/sqlc/cmd/sqlc@latest`) — generates type-safe Go code from SQL queries. Eliminates manual `rows.Scan` calls.
+- `pgx.ErrNoRows` — the error returned when `QueryRow` matches nothing.
+- Use `$1`, `$2` parameterized queries. Never concatenate user input into SQL strings.
+- `LISTEN/NOTIFY` — PostgreSQL's built-in pub/sub. Useful in Phase 7 for real-time updates without polling.
+
+**If you chose SQLite:**
+- Driver: `go get modernc.org/sqlite` (pure Go, no CGO needed) or `go get github.com/mattn/go-sqlite3` (requires CGO).
+- `sql.ErrNoRows` — the error from `QueryRow` when nothing matches.
+- Use `WAL` mode for better concurrent read performance: `PRAGMA journal_mode=WAL;`
+- SQLite locks the entire database on writes. Acceptable for Handoff's scale, but be aware.
 
 ### 6. Sources
 
-- pgx documentation: https://pkg.go.dev/github.com/jackc/pgx/v5
-- pgxpool: https://pkg.go.dev/github.com/jackc/pgx/v5/pgxpool
-- Go database tutorial: https://go.dev/doc/database/
-- PostgreSQL data types: https://www.postgresql.org/docs/16/datatype.html
-- SQL injection prevention: https://go.dev/doc/database/sql-injection
+**MongoDB:**
+- Go driver: https://pkg.go.dev/go.mongodb.org/mongo-driver/v2/mongo
+- Quickstart: https://www.mongodb.com/docs/drivers/go/current/quick-start/
+- Update operators: https://www.mongodb.com/docs/manual/reference/operator/update/
+- Indexes: https://www.mongodb.com/docs/manual/indexes/
+
+**PostgreSQL:**
+- pgx driver: https://pkg.go.dev/github.com/jackc/pgx/v5
+- sqlc: https://docs.sqlc.dev/en/latest/
+- PostgreSQL indexes: https://www.postgresql.org/docs/current/indexes.html
+- LISTEN/NOTIFY: https://www.postgresql.org/docs/current/sql-notify.html
+
+**SQLite:**
+- modernc.org/sqlite: https://pkg.go.dev/modernc.org/sqlite
+- SQLite in Go: https://www.golang.dk/articles/go-and-sqlite-in-the-cloud
+- WAL mode: https://www.sqlite.org/wal.html
 
 ### 7. Common Mistakes to Avoid
 
-- String-concatenating SQL queries — SQL injection, the most basic and most dangerous security vulnerability.
-- Not using a connection pool — opening a new connection per query is catastrophically slow under any real traffic.
-- Forgetting to close rows: `rows, _ := pool.Query(...)` — if you don't call `rows.Close()`, connections leak out of the pool. Use `defer rows.Close()` immediately after the `Query` call.
-- Running migrations AFTER starting the HTTP server — requests arrive before tables exist. Always migrate first.
-- Using `TEXT` for IDs without thinking about generation — UUIDs work well. Generate them in Go (`uuid.New().String()`), not in SQL.
-- Not handling `pgx.ErrNoRows` — without this check, your handler returns 500 ("scan failed") instead of 404.
-- Forgetting `sslmode=disable` in local development — pgx defaults to requiring SSL, which your local Docker Postgres doesn't have.
+- **Not adding database serialization tags** — fields serialize with wrong names, queries silently match nothing or map incorrectly.
+- **Not creating indexes** — `ListIncidents` with a status filter does a full scan on every call. Unacceptable at any real scale.
+- **Forgetting to handle the not-found case** — without this check, your handler returns 500 ("decode failed" / "no rows") instead of 404.
+- **Initializing entries as nil instead of an empty collection** — downstream code breaks on null vs empty array distinction.
+- **Not closing cursors/result sets** — every query that returns multiple results holds a server-side resource. Close it immediately after use.
+- **Using the wrong write method** — one write method replaces the entire record, another updates only specified fields. Using the wrong one wipes data. Read your driver's docs carefully.
+- **Not using parameterized queries (relational databases)** — string concatenation in queries is always wrong. Use placeholders.
 
 ### 8. Checklist
 
 ```
-[ ] docker compose up db — PostgreSQL starts
-[ ] go run . with DATABASE_URL — migrations run, server starts with store=postgres
+[ ] docker compose up db — database starts and is healthy
+[ ] go run . with database connection string — schema/indexes ensured, server starts with store=database
 [ ] All Phase 5 curl commands produce identical results
 [ ] Restart server — data persists
-[ ] go run . without DATABASE_URL — falls back to memory store
+[ ] go run . without connection string — falls back to memory store
 [ ] go vet ./... — zero warnings
-[ ] No raw string concatenation in any SQL query
+[ ] Code comment explaining data mapping choice and tradeoffs
 ```
 
 ### 9. Knowledge Gained
 
 ```
-✅ pgx/pgxpool — production Go PostgreSQL driver
-✅ Connection pooling — why it exists, how it works
-✅ Parameterized queries — SQL injection prevention
-✅ Transactions — atomic multi-statement operations
-✅ Schema migrations — versioned, ordered database changes
-✅ Interface swap — memory → postgres, zero handler changes
+✅ Database Go driver — connection, queries, writes
+✅ Data mapping — how Go structs map to your database's storage model
+✅ Connection handling — driver-managed pooling
+✅ Efficient writes — updating specific fields and appending to collections without replacing entire records
+✅ Schema/index management — ensuring readiness on startup for query performance
+✅ Interface swap — memory → database, zero handler changes
 ✅ Docker Compose for local database dependencies
 ```
 
@@ -678,6 +671,12 @@ State change:
     "new_value": "SEV2"
 }
 ```
+
+**Important limitation — single-process broadcasting:**
+
+The hub pattern implemented here is process-local. The hub lives in one Go process's memory. This works when you run a single API instance. In Phase 14, if you deploy multiple replicas, a client connected to replica 1 will not receive broadcasts triggered by writes to replica 2. This is a known limitation. Production solutions include database-level change notifications (e.g., PostgreSQL `LISTEN/NOTIFY`, MongoDB Change Streams) or an external message broker (Redis pub/sub, NATS). This curriculum leaves the single-process hub as-is and documents the limitation. If you want to solve it, research how your database can notify your application of writes made by other instances.
+
+If you want to implement cross-replica broadcasting, look [Bonus](#bonus) part at the end.
 
 ### 4. Expected Output
 
@@ -755,7 +754,11 @@ The standard solution is called the "hub pattern." A central struct holds a map 
 ✅ Slow client handling — buffered channels, drop policy
 ✅ Ping/pong keepalive — detecting dead connections
 ✅ Real-time event distribution in a production service
+✅ Understanding the single-process limitation and production alternatives
 ```
+
+---
+
 # PHASE 8 — Observability & Feature Flags
 
 > **Why this phase matters**
@@ -806,7 +809,7 @@ This is the natural progression: Phase 5 logged what was available. Now you have
 **Readiness probe (`GET /readyz`):**
 
 Different from `/healthz`. The health probe says "the process is alive." The readiness probe says "the process can serve traffic." `/readyz` must:
-- Ping the database connection pool
+- Ping the database to verify connectivity. Your database driver has a method for this — find it.
 - If the ping succeeds: return `200 {"status":"ready"}`
 - If the ping fails: return `503 {"status":"not ready","reason":"database unreachable"}`
 
@@ -831,7 +834,7 @@ Add computed metrics to the `GET /incidents/:id/handoff` response:
 
 **Database instrumentation:**
 
-Wrap the `PostgresStore` methods to record query durations:
+Wrap your database store methods to record query durations:
 ```go
 func (s *InstrumentedStore) GetIncident(ctx context.Context, id string) (Incident, error) {
     timer := prometheus.NewTimer(dbQueryDuration.WithLabelValues("get_incident"))
@@ -858,7 +861,7 @@ handoff_http_request_duration_seconds_bucket{method="GET",path="/incidents",le="
 $ curl -s http://localhost:8080/readyz | jq .
 {"status":"ready"}
 
-# Stop PostgreSQL:
+# Stop the database:
 $ docker compose stop db
 $ curl -s http://localhost:8080/readyz | jq .
 {"status":"not ready","reason":"database unreachable"}
@@ -873,7 +876,7 @@ $ curl -s http://localhost:8080/readyz | jq .
 - `prometheus.NewHistogramVec(opts, []string{"method","path"})` — histogram with default buckets covering 5ms to 10s.
 - `prometheus.NewTimer(histogram.WithLabelValues(...))` then `defer timer.ObserveDuration()` — one-line latency recording.
 - `promhttp.Handler()` serves the `/metrics` endpoint in Prometheus exposition format — you don't write the output format yourself.
-- `pool.Ping(ctx)` — pings the PostgreSQL connection pool. Returns an error if the database is unreachable.
+- **Database ping:** Every database driver has a ping or health-check method. MongoDB: `client.Ping(ctx, ...)`. PostgreSQL/pgx: `pool.Ping(ctx)`. SQLite: `db.PingContext(ctx)`. Find yours.
 - **StatusWriter hint** (if stuck on capturing status codes): the standard approach is to wrap `http.ResponseWriter` with a struct that intercepts `WriteHeader(code)`, stores the code in a field, then forwards the call. Your wrapper struct embeds `http.ResponseWriter` and overrides one method.
 
 ### 6. Sources
@@ -1522,46 +1525,48 @@ func main() {
 package main
 
 import (
-	"database/sql"
+	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"strings"
 
-	_ "github.com/lib/pq"
+	"go.mongodb.org/mongo-driver/v2/bson"
+	"go.mongodb.org/mongo-driver/v2/mongo"
+	"go.mongodb.org/mongo-driver/v2/mongo/options"
 )
 
-var db *sql.DB
+var col *mongo.Collection
 
 func init() {
-	var err error
-	db, err = sql.Open("postgres", "postgres://app:pass@localhost/mydb?sslmode=disable")
+	client, err := mongo.Connect(options.Client().ApplyURI("mongodb://localhost:27017"))
 	if err != nil {
 		panic(err)
 	}
+	col = client.Database("mydb").Collection("users")
 }
 
 func handleSearch(w http.ResponseWriter, r *http.Request) {
-	query := r.URL.Query().Get("q")
+	q := r.URL.Query().Get("q")
 	role := r.URL.Query().Get("role")
 
-	sqlQuery := fmt.Sprintf(
-		"SELECT id, name, email FROM users WHERE name LIKE '%%%s%%'", query)
+	var filter bson.M
+	json.Unmarshal([]byte(fmt.Sprintf(`{"name": {"$regex": "%s"}}`, q)), &filter)
 
 	if role != "" {
-		sqlQuery += fmt.Sprintf(" AND role = '%s'", role)
+		filter["role"] = role
 	}
 
-	rows, err := db.Query(sqlQuery)
+	cursor, err := col.Find(context.TODO(), filter)
 	if err != nil {
 		http.Error(w, "query failed", 500)
 		return
 	}
 
-	for rows.Next() {
-		var id int
-		var name, email string
-		rows.Scan(&id, &name, &email)
-		fmt.Fprintf(w, "%d: %s (%s)\n", id, name, email)
+	for cursor.Next(context.TODO()) {
+		var result bson.M
+		cursor.Decode(&result)
+		fmt.Fprintf(w, "%s: %s (%s)\n", result["_id"], result["name"], result["email"])
 	}
 }
 
@@ -1574,17 +1579,18 @@ func handleAuth(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var userID int
-	err := db.QueryRow(
-		fmt.Sprintf("SELECT id FROM sessions WHERE token = '%s' AND active = true", token),
-	).Scan(&userID)
+	filter := bson.M{
+		"$where": fmt.Sprintf("this.token == '%s' && this.active == true", token),
+	}
 
+	var session bson.M
+	err := col.FindOne(context.TODO(), filter).Decode(&session)
 	if err != nil {
 		http.Error(w, "unauthorized", 401)
 		return
 	}
 
-	fmt.Fprintf(w, "authenticated as user %d", userID)
+	fmt.Fprintf(w, "authenticated as user %s", session["user_id"])
 }
 
 func main() {
@@ -1594,7 +1600,7 @@ func main() {
 }
 ```
 
-*Hints: Two SQL injection vulnerabilities (search query and auth token). `rows.Scan` error ignored (NULL columns cause silent failures). `rows` never closed (connection leak). `sql.Open` only validates DSN format, doesn't test actual connectivity. `ListenAndServe` error ignored.*
+*Hints: The search handler builds a regex from raw user input — an attacker can inject arbitrary MongoDB operators via the query string. The auth handler uses `$where` with string formatting — `$where` evaluates server-side JavaScript, and the token value is spliced in unsanitized, enabling NoSQL injection (the attacker can craft a token like `' || true || '` to bypass authentication). The cursor is never closed (resource leak). `cursor.Decode` error is ignored (nil fields cause silent failures). `json.Unmarshal` error is ignored (malformed input proceeds with a nil filter). `ListenAndServe` error is ignored.*
 
 ---
 
@@ -1612,13 +1618,14 @@ FIX:   [the corrected code]
 - 100 Go Mistakes: https://100go.co
 - Go race detector: https://go.dev/doc/articles/race_detector
 - Common Go pitfalls: https://go.dev/doc/faq
+- MongoDB NoSQL injection: https://owasp.org/www-project-web-security-testing-guide/latest/4-Web_Application_Security_Testing/07-Input_Validation_Testing/05.6-Testing_for_NoSQL_Injection
 
 ### 6. Common Mistakes to Avoid
 
 - Assuming code is correct because it compiles — Go's concurrency bugs are runtime bugs, invisible to the compiler.
 - Missing the nil interface subtlety: an interface holding a nil pointer is NOT equal to `nil` itself.
 - Not checking if channels are closed — the most common goroutine leak pattern.
-- Overlooking SQL injection in code that "looks safe" — string formatting in queries is always wrong.
+- Overlooking NoSQL injection in code that "looks safe" — string formatting in database queries is always wrong, regardless of the database.
 
 ### 7. Knowledge Gained
 
@@ -1627,7 +1634,7 @@ FIX:   [the corrected code]
 ✅ Goroutine leak patterns and fixes
 ✅ Race condition identification
 ✅ Nil interface gotchas
-✅ Security bug recognition
+✅ Security bug recognition (including NoSQL injection)
 ```
 
 ---
@@ -1755,6 +1762,9 @@ Evaluation: all endpoints correct, thread-safe, logging middleware, graceful shu
 ✅ Prioritizing correctness over completeness
 ✅ Technical communication while coding
 ```
+
+---
+
 # PART 3 — Frontend (Phases 11–12)
 
 This track builds Handoff's frontend: a typed Vue.js application with state management, real-time WebSocket updates, authentication UI, and proper error handling. By the end, the full-stack application is usable.
@@ -1998,7 +2008,7 @@ const mockIncident: Incident = {
 # PHASE 12 — Full Handoff Frontend
 
 > **Why this phase matters**
-> Phase 11 built the parts. This phase assembles them into a working application connected to the Go backend. This is where full-stack engineering happens: the frontend makes an HTTP request, the Go API responds with JSON, TypeScript validates the shape, Vue renders it reactively, and the user interacts. When something breaks, the bug could be in any layer — Go handler, SQL query, JSON serialization, TypeScript type, Vue reactivity, CSS layout. Knowing how to trace a problem across the full stack is the skill that separates a frontend developer from a full-stack engineer.
+> Phase 11 built the parts. This phase assembles them into a working application connected to the Go backend. This is where full-stack engineering happens: the frontend makes an HTTP request, the Go API responds with JSON, TypeScript validates the shape, Vue renders it reactively, and the user interacts. When something breaks, the bug could be in any layer — Go handler, database query, JSON serialization, TypeScript type, Vue reactivity, CSS layout. Knowing how to trace a problem across the full stack is the skill that separates a frontend developer from a full-stack engineer.
 
 ---
 
@@ -2328,7 +2338,7 @@ This track completes test coverage, containerizes the stack, automates the pipel
 
 ### 1. Context
 
-Phase 5.Test covered validation and basic handler tests. Since then you've added PostgreSQL, WebSocket, metrics, feature flags, and auth. If you wrote tests as you built (as instructed), some of this is covered. If you didn't, this is where you catch up.
+Phase 5.Test covered validation and basic handler tests. Since then you've added database persistence, WebSocket, metrics, feature flags, and auth. If you wrote tests as you built (as instructed), some of this is covered. If you didn't, this is where you catch up.
 
 ### 2. Goal
 
@@ -2446,7 +2456,7 @@ npx vitest run --coverage
 
 ### 1. Context
 
-Handoff has a Go backend, a Vue frontend, and a PostgreSQL database. They run locally via manual commands. This challenge packages everything into Docker containers, wires them with Docker Compose, automates testing and building with GitHub Actions, writes Kubernetes manifests, and deploys the result to a live URL.
+Handoff has a Go backend, a Vue frontend, and a database. They run locally via manual commands. This challenge packages everything into Docker containers, wires them with Docker Compose, automates testing and building with GitHub Actions, writes Kubernetes manifests, and deploys the result to a live URL.
 
 ### 2. Goal
 
@@ -2458,7 +2468,7 @@ Ship Handoff as a containerized, CI-gated, publicly accessible product.
 
 Write a multi-stage Dockerfile for the Go API. Requirements:
 - Stage 1 (builder): use a Go base image, copy source, build the binary with `CGO_ENABLED=0` (produces a static binary with no C dependencies — required for minimal runtime images)
-- Stage 2 (runtime): use a minimal base image (alpine), copy only the binary and migrations directory from the builder stage, run as a non-root user, expose port 8080
+- Stage 2 (runtime): use a minimal base image (alpine), copy only the binary from the builder stage, run as a non-root user, expose port 8080
 - The final image must be under 20MB. Without multi-stage, it would be ~300MB (includes the Go compiler). Verify with `docker images`.
 - Add a `.dockerignore` to exclude `.git`, test files, and build artifacts
 
@@ -2477,13 +2487,15 @@ Write an nginx config that does two things:
 
 **Docker Compose (`docker-compose.yml`):**
 
-Wire all three services (Go API, Vue frontend, PostgreSQL) into one docker-compose file. Requirements:
-- API depends on DB (DB must be healthy before API starts)
-- API reads `DATABASE_URL` and `JWT_SECRET` from environment
-- DB data persists via a named volume
-- Health checks on both API (`/healthz`) and DB (`pg_isready`)
+Wire all three services (Go API, Vue frontend, database) into one Docker Compose file. Requirements:
+- API depends on the database (database must be healthy before API starts)
+- API reads the database connection string and `JWT_SECRET` from environment
+- Database data persists via a named volume
+- Health checks on API (`/healthz`) and database (use the database's native health-check mechanism)
 - Frontend depends on API
 - One command runs everything: `docker compose up --build`
+
+Adapt the database service to match your choice from Phase 6. The structure is the same regardless of database — image, port, volume, health check — only the specifics change.
 
 **GitHub Actions (`.github/workflows/ci.yml`):**
 
@@ -2498,16 +2510,16 @@ Read the GitHub Actions documentation to understand the YAML structure: triggers
 
 ```
 k8s/
-├── api-deployment.yaml      # 2 replicas, resource limits, liveness + readiness probes
+├── api-deployment.yaml      # 1 replica, resource limits, liveness + readiness probes
 ├── api-service.yaml          # ClusterIP service
 ├── frontend-deployment.yaml  # 2 replicas
 ├── frontend-service.yaml     # LoadBalancer service
-├── db-configmap.yaml         # DATABASE_URL config
+├── db-configmap.yaml         # Database connection string
 └── db-secret.yaml            # JWT_SECRET (base64 encoded)
 ```
 
 API deployment includes:
-- `replicas: 2`
+- `replicas: 1` (single replica — the WebSocket hub pattern from Phase 7 is process-local; multiple replicas would break real-time broadcasting. See Phase 7's limitation note.)
 - `resources: { requests: { cpu: 100m, memory: 64Mi }, limits: { cpu: 200m, memory: 128Mi } }`
 - `livenessProbe: { httpGet: { path: /healthz, port: 8080 } }`
 - `readinessProbe: { httpGet: { path: /readyz, port: 8080 } }`
@@ -2515,12 +2527,12 @@ API deployment includes:
 
 These manifests exist in the repo and demonstrate understanding. Running them on Minikube is optional.
 
-**Deploy to Render (free tier):**
+**Deploy:**
 - Go API → Render Web Service (Docker deploy from GitHub)
-- PostgreSQL → Render managed database (free tier, 256MB)
+- Database → managed cloud service (e.g., MongoDB Atlas free tier, Neon PostgreSQL free tier, or Turso for SQLite — choose the managed service that matches your database)
 - Vue frontend → Render Static Site (build: `npm run build`, publish: `dist`)
 - Set `VITE_API_URL` to the deployed API URL during build
-- Set `DATABASE_URL` and `JWT_SECRET` as environment variables in Render
+- Set the database connection string and `JWT_SECRET` as environment variables in Render
 
 **README.md:**
 
@@ -2578,6 +2590,7 @@ docker compose up --build
 - Hardcoding secrets in `docker-compose.yml` or Kubernetes manifests — use environment variables and GitHub Secrets.
 - Forgetting `try_files ... /index.html` in nginx — Vue Router URLs return 404 on page refresh.
 - Not caching dependencies in CI — npm and Go module downloads on every run waste minutes.
+- Cloud database free tiers often sleep after inactivity — first request after sleep takes several seconds. This is normal, not a bug.
 
 ### 8. Checklist
 
@@ -2587,7 +2600,7 @@ docker compose up --build
 [ ] Push to GitHub — CI runs, tests pass, badge is green
 [ ] Push to main — Docker images pushed to ghcr.io
 [ ] k8s/ manifests present with deployments, services, configmap, secret, probes
-[ ] Deployed to Render — live URL works
+[ ] Deployed to Render + managed database — live URL works
 [ ] README contains: description, architecture, run instructions, API docs, CI badge, live link
 [ ] git log shows meaningful commit history across all phases
 ```
@@ -2604,6 +2617,18 @@ docker compose up --build
 ✅ Free-tier deployment — shipping to a live URL
 ✅ README as documentation — the first thing anyone reads
 ```
+
 ---
 
 *Complete phases in order. Don't skip. Each phase builds on the previous one.*
+
+> # Bonus
+> 1. **Multi-replica WebSocket fan-out** — Solve the single-process hub limitation from Phase 7. Use MongoDB Change Streams or PostgreSQL `LISTEN/NOTIFY` to broadcast across replicas. Then set `replicas: 3` in Kubernetes and verify real-time updates work across all instances. This is the most important production gap in the current architecture.
+>
+> 2. **Token refresh** — The current JWT expires after 24 hours with no renewal. Add a `/auth/refresh` endpoint that issues a new token from a valid (non-expired) existing token. Update the Vue API client to detect 401 responses, attempt a refresh, and retry the original request transparently.
+>
+> 3. **Persistent feature flags** — Phase 8.2's flags live in memory and reset on restart. Move them to the database. Add a simple admin UI page for toggling flags without curl.
+>
+> 4. **Grafana dashboard** — Add Grafana to Docker Compose. Configure Prometheus to scrape `/metrics`. Build a dashboard showing request rate, latency percentiles, error rate, and active WebSocket connections. This turns Phase 8.1's instrumentation into something visual and operational.
+>
+> None of these are required. The curriculum is complete at Phase 14. These exist for continued growth after the core is shipped.
