@@ -1,15 +1,18 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"net/http/httptest"
 	"strings"
 	"testing"
 )
 
-func TestCreateIncident(t *testing.T) {
-	memoryStore := MemoryStore{incidents: make(map[string]Incident)}
-	incHandler := IncidentHandler{Store: &memoryStore}
+func TestMongoCreateIncident(t *testing.T) {
+	config := loadConfig()
+	mongoStore := NewMongoStore(config.ConnectionString, config.DatabaseName)
+	incHandler := IncidentHandler{Store: mongoStore}
+	mongoStore.DropAll(context.Background())
 	router := getRouter(incHandler)
 
 	t.Run("Normal Request", func(t *testing.T) {
@@ -89,9 +92,11 @@ func TestCreateIncident(t *testing.T) {
 	}
 }
 
-func TestGetIncident(t *testing.T) {
-	memoryStore := MemoryStore{incidents: make(map[string]Incident)}
-	incHandler := IncidentHandler{Store: &memoryStore}
+func TestMongoGetIncident(t *testing.T) {
+	config := loadConfig()
+	mongoStore := NewMongoStore(config.ConnectionString, config.DatabaseName)
+	incHandler := IncidentHandler{Store: mongoStore}
+	mongoStore.DropAll(context.Background())
 	router := getRouter(incHandler)
 	rec1 := httptest.NewRecorder()
 	body := `{"title": "order-service request drop", "service": "order-service", "severity": "SEV1", "opened_by": "Anh Nguyen"}`
@@ -149,9 +154,11 @@ func TestGetIncident(t *testing.T) {
 	})
 }
 
-func TestListIncident(t *testing.T) {
-	memoryStore := MemoryStore{incidents: make(map[string]Incident)}
-	incHandler := IncidentHandler{Store: &memoryStore}
+func TestMongoListIncident(t *testing.T) {
+	config := loadConfig()
+	mongoStore := NewMongoStore(config.ConnectionString, config.DatabaseName)
+	incHandler := IncidentHandler{Store: mongoStore}
+	mongoStore.DropAll(context.Background())
 	router := getRouter(incHandler)
 	rec1 := httptest.NewRecorder()
 	body := `{"title": "order-service request drop", "service": "order-service", "severity": "SEV1", "opened_by": "Anh Nguyen"}`
@@ -203,9 +210,11 @@ func TestListIncident(t *testing.T) {
 	})
 }
 
-func TestUpdateIncident(t *testing.T) {
-	memoryStore := MemoryStore{incidents: make(map[string]Incident)}
-	incHandler := IncidentHandler{Store: &memoryStore}
+func TestMongoUpdateIncident(t *testing.T) {
+	config := loadConfig()
+	mongoStore := NewMongoStore(config.ConnectionString, config.DatabaseName)
+	incHandler := IncidentHandler{Store: mongoStore}
+	mongoStore.DropAll(context.Background())
 	router := getRouter(incHandler)
 	rec1 := httptest.NewRecorder()
 	body1 := `{"title": "order-service request drop", "service": "order-service", "severity": "SEV1", "opened_by": "Anh Nguyen"}`
@@ -238,9 +247,11 @@ func TestUpdateIncident(t *testing.T) {
 	})
 }
 
-func TestAddTimelineEntry(t *testing.T) {
-	memoryStore := MemoryStore{incidents: make(map[string]Incident)}
-	incHandler := IncidentHandler{Store: &memoryStore}
+func TestMongoAddTimelineEntry(t *testing.T) {
+	config := loadConfig()
+	mongoStore := NewMongoStore(config.ConnectionString, config.DatabaseName)
+	incHandler := IncidentHandler{Store: mongoStore}
+	mongoStore.DropAll(context.Background())
 	router := getRouter(incHandler)
 	rec1 := httptest.NewRecorder()
 	body1 := `{"title": "order-service request drop", "service": "order-service", "severity": "SEV1", "opened_by": "Anh Nguyen"}`
