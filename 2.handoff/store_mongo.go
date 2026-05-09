@@ -16,6 +16,10 @@ type MongoStore struct {
 	db *mongo.Database
 }
 
+func (m *MongoStore) DropAll(ctx context.Context) error {
+	return m.db.Drop(ctx)
+}
+
 func NewMongoStore(uri string, DBName string) *MongoStore {
 	client, err := mongo.Connect(options.Client().ApplyURI(uri))
 	if err != nil {
