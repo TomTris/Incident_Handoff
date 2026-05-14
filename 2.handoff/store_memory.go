@@ -92,14 +92,15 @@ func (m *MemoryStore) ListIncidents(ctx context.Context, filter IncidentFilter) 
 	return array, nil
 }
 
-func (m *MemoryStore) UpdateIncident(ctx context.Context, id string, update IncidentUpdate) error {
+func (m *MemoryStore) UpdateIncident(ctx context.Context, id string, update IncidentUpdate) (Incident, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
 	incident, ok := m.incidents[id]
 	if ok == false {
-		return ErrIncidentNotFound
+		return incident, ErrIncidentNotFound
 	}
+	incBefore := incident
 
 	switch {
 	case update.Status != nil:
@@ -112,5 +113,5 @@ func (m *MemoryStore) UpdateIncident(ctx context.Context, id string, update Inci
 
 	incident.UpdatedAt = time.Now()
 	m.incidents[id] = incident
-	return nil
+	return incBefore, nil
 }

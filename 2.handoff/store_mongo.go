@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log"
 	"log/slog"
 	"strconv"
@@ -19,14 +20,6 @@ type MongoStore struct {
 
 func (m *MongoStore) DropAll(ctx context.Context) error {
 	return m.db.Drop(ctx)
-}
-
-func connectMongoDB(uri string) *mongo.Client {
-	client, err := mongo.Connect(options.Client().ApplyURI(uri))
-	if err != nil {
-		log.Fatal(err)
-	}
-	return client
 }
 
 func NewMongoStore(client *mongo.Client, DBName string) *MongoStore {
@@ -174,27 +167,33 @@ func (m *MongoStore) ListIncidents(ctx context.Context, incFilter IncidentFilter
 	return incidents, err
 }
 
-func (m *MongoStore) UpdateIncident(ctx context.Context, incidentId string, update IncidentUpdate) error {
-	DBUpdate := bson.M{}
+func (m *MongoStore) UpdateIncident(ctx context.Context, incidentId string, update IncidentUpdate) (Incident, error) {
+	fields := bson.M{"updated_at": time.Now()}
 
 	switch {
 	case update.Status != nil:
-		DBUpdate["status"] = *update.Status
+		fields["status"] = *update.Status
 	case update.Severity != nil:
-		DBUpdate["severity"] = *update.Severity
+		fields["severity"] = *update.Severity
 	case update.OnCall != nil:
-		DBUpdate["on_call"] = *update.OnCall
+		fields["on_call"] = *update.OnCall
 	}
-
-	DBUpdate["updated_at"] = time.Now()
 
 	col := m.db.Collection(CollectionIncidents)
-	result, err := col.UpdateByID(ctx, incidentId, bson.M{"$set": DBUpdate})
+	opts := options.FindOneAndUpdate().SetReturnDocument(options.Before)
+	var inc Incident
+	err := col.FindOneAndUpdate(
+		ctx,
+		bson.M{"id": incidentId},
+		bson.M{"$set": fields},
+		opts,
+	).Decode(&inc)
+
 	if err != nil {
-		return err
+		if errors.Is(err, mongo.ErrNoDocuments) {
+			return inc, ErrIncidentNotFound
+		}
+		return inc, fmt.Errorf("Update Incident %s: %v", incidentId, err)
 	}
-	if result.MatchedCount == 0 {
-		return ErrIncidentNotFound
-	}
-	return nil
+	return inc, nil
 }

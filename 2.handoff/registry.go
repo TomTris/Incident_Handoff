@@ -38,6 +38,7 @@ func (r *Registry) run() {
 			r.leaveRegister(client)
 		case broadcast := <-r.broadcast:
 			r.broadcastMessage(broadcast)
+		// For testing / graceful shutdown
 		case <-r.done:
 			for _, hub := range r.hubs {
 				close(hub.done)
@@ -48,6 +49,8 @@ func (r *Registry) run() {
 }
 
 func (r *Registry) joinRegistry(client *Client) {
+	wsConnections.Inc()
+
 	incID := client.incidentID
 	r.clientCounter[incID]++
 
@@ -58,9 +61,12 @@ func (r *Registry) joinRegistry(client *Client) {
 	}
 	client.hub = r.hubs[incID]
 	client.hub.register <- client
+
 }
 
 func (r *Registry) leaveRegister(client *Client) {
+	wsConnections.Dec()
+
 	incID := client.incidentID
 	r.clientCounter[incID]--
 

@@ -11,26 +11,38 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/prometheus/client_golang/prometheus"
 	"go.mongodb.org/mongo-driver/v2/mongo"
+	"go.mongodb.org/mongo-driver/v2/mongo/options"
 )
 
 func NewStore(conf Config) (*mongo.Client, Store) {
+	var client *mongo.Client = nil
+	var store InstrumentedStore
+
 	if conf.ConnectionString != "" {
 		slog.Info("using mongo store", "db", conf.DatabaseName)
-		client := connectMongoDB(conf.ConnectionString)
+		client, err := mongo.Connect(options.Client().ApplyURI(conf.ConnectionString))
+		if err != nil {
+			log.Fatal(err)
+		}
 		mongoStore := NewMongoStore(client, conf.DatabaseName)
-		return client, mongoStore
+		store = InstrumentedStore{s: mongoStore}
+	} else {
+		slog.Info("no connection string, using in-memory store")
+		store = InstrumentedStore{NewMemoryStore()}
 	}
-	slog.Info("no connection string, using in-memory store")
-	return nil, NewMemoryStore()
+	return client, &store
 }
 
 func main() {
 	config := loadConfig()
 	client, store := NewStore(config)
 	registry := NewRegistry()
+	promRegistry := prometheus.NewRegistry()
+	NewMetrics(promRegistry)
 	incHandler := IncidentHandler{Store: store, Registry: registry}
-	router := getRouter(&incHandler, client)
+	router := getRouter(&incHandler, client, promRegistry)
 
 	srv := http.Server{
 		Addr:    ":" + config.Port,

@@ -54,13 +54,13 @@ func (c *Client) readPump() {
 		_, msg, err := c.conn.ReadMessage()
 		if err != nil {
 			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
-				slog.Error("unexpected close", "err", err)
+				slog.Error("Client readPump unexpected close", "err", err)
 			}
 			break
 		}
 		// these 2 lines are not important for Handoff yet.
 		msg = bytes.TrimSpace(bytes.Replace(msg, newline, space, -1))
-		// c.hub.broadcast <- msg
+		c.hub.broadcast <- msg
 	}
 }
 

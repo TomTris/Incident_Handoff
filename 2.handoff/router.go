@@ -3,10 +3,12 @@ package main
 import (
 	"net/http"
 
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"go.mongodb.org/mongo-driver/v2/mongo"
 )
 
-func getRouter(incHandler *IncidentHandler, mongoClient *mongo.Client) http.Handler {
+func getRouter(incHandler *IncidentHandler, mongoClient *mongo.Client, promRegistry *prometheus.Registry) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /incidents", incHandler.CreateIncident)
 	mux.HandleFunc("POST /incidents/{id}/entries", incHandler.AddEntry)
@@ -18,6 +20,7 @@ func getRouter(incHandler *IncidentHandler, mongoClient *mongo.Client) http.Hand
 
 	mux.HandleFunc("GET /healthz", healthCheck)
 	mux.HandleFunc("GET /readyz", readyCheck(mongoClient))
-	router := RequestIDMiddleware(LoggingMiddleware(CORSMiddleware(TimeoutMiddleware(mux))))
+	mux.Handle("/metrics", promhttp.HandlerFor(promRegistry, promhttp.HandlerOpts{Registry: promRegistry}))
+	router := RequestIDMiddleware(ObservabilityMiddleware(CORSMiddleware(TimeoutMiddleware(mux))))
 	return router
 }
