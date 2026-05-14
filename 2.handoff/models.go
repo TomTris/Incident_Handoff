@@ -49,7 +49,7 @@ type IncidentFilter struct {
 
 func (f *IncidentFilter) Validate() error {
 	f.Status = strings.TrimSpace(f.Status)
-	f.Service = strings.TrimSpace(f.Status)
+	f.Service = strings.TrimSpace(f.Service)
 	if f.Status != "" && !IncidentStatus[f.Status] {
 		return ErrBadIncidentStatus
 	}

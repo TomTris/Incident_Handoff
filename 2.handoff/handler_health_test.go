@@ -5,12 +5,14 @@ import (
 	"encoding/json"
 	"net/http/httptest"
 	"testing"
+
+	"github.com/prometheus/client_golang/prometheus"
 )
 
 func TestHealthCheck(t *testing.T) {
 	memoryStore := MemoryStore{incidents: make(map[string]Incident)}
 	incHandler := &IncidentHandler{Store: &memoryStore}
-	router := getRouter(incHandler)
+	router := getRouter(incHandler, nil, prometheus.NewRegistry())
 
 	req := httptest.NewRequest("GET", "/healthz", nil)
 	req.Header.Set("Content-Type", "application/json")

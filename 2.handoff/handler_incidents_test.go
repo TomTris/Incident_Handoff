@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -8,14 +9,21 @@ import (
 	"testing"
 
 	"github.com/gorilla/websocket"
+	"github.com/prometheus/client_golang/prometheus"
 )
 
 func TestCreateIncident(t *testing.T) {
-	memoryStore := MemoryStore{incidents: make(map[string]Incident)}
-	incHandler := &IncidentHandler{Store: &memoryStore, Registry: NewRegistry()}
-	router := getRouter(incHandler)
+	config := loadConfig()
+	client, store := NewStore(config)
+	incHandler := IncidentHandler{Store: store, Registry: NewRegistry()}
+	router := getRouter(&incHandler, client, prometheus.NewRegistry())
 	go incHandler.Registry.run()
 	defer close(incHandler.Registry.done)
+	if instrumented, ok := store.(*InstrumentedStore); ok {
+		if ms, ok := instrumented.s.(*MongoStore); ok {
+			ms.DropAll(context.Background())
+		}
+	}
 
 	t.Run("Normal Request", func(t *testing.T) {
 
@@ -95,11 +103,18 @@ func TestCreateIncident(t *testing.T) {
 }
 
 func TestGetIncident(t *testing.T) {
-	memoryStore := MemoryStore{incidents: make(map[string]Incident)}
-	incHandler := &IncidentHandler{Store: &memoryStore, Registry: NewRegistry()}
-	router := getRouter(incHandler)
+	config := loadConfig()
+	client, store := NewStore(config)
+	incHandler := IncidentHandler{Store: store, Registry: NewRegistry()}
+	router := getRouter(&incHandler, client, prometheus.NewRegistry())
 	go incHandler.Registry.run()
 	defer close(incHandler.Registry.done)
+	if instrumented, ok := store.(*InstrumentedStore); ok {
+		if ms, ok := instrumented.s.(*MongoStore); ok {
+			ms.DropAll(context.Background())
+		}
+	}
+
 	rec1 := httptest.NewRecorder()
 	body := `{"title": "order-service request drop", "service": "order-service", "severity": "SEV1", "opened_by": "Anh Nguyen"}`
 	req1 := httptest.NewRequest("POST", "/incidents", strings.NewReader(body))
@@ -157,11 +172,18 @@ func TestGetIncident(t *testing.T) {
 }
 
 func TestListIncident(t *testing.T) {
-	memoryStore := MemoryStore{incidents: make(map[string]Incident)}
-	incHandler := &IncidentHandler{Store: &memoryStore, Registry: NewRegistry()}
-	router := getRouter(incHandler)
+	config := loadConfig()
+	client, store := NewStore(config)
+	incHandler := IncidentHandler{Store: store, Registry: NewRegistry()}
+	router := getRouter(&incHandler, client, prometheus.NewRegistry())
 	go incHandler.Registry.run()
 	defer close(incHandler.Registry.done)
+	if instrumented, ok := store.(*InstrumentedStore); ok {
+		if ms, ok := instrumented.s.(*MongoStore); ok {
+			ms.DropAll(context.Background())
+		}
+	}
+
 	rec1 := httptest.NewRecorder()
 	body := `{"title": "order-service request drop", "service": "order-service", "severity": "SEV1", "opened_by": "Anh Nguyen"}`
 	req1 := httptest.NewRequest("POST", "/incidents", strings.NewReader(body))
@@ -213,11 +235,18 @@ func TestListIncident(t *testing.T) {
 }
 
 func TestUpdateIncident(t *testing.T) {
-	memoryStore := MemoryStore{incidents: make(map[string]Incident)}
-	incHandler := &IncidentHandler{Store: &memoryStore, Registry: NewRegistry()}
-	router := getRouter(incHandler)
+	config := loadConfig()
+	client, store := NewStore(config)
+	incHandler := IncidentHandler{Store: store, Registry: NewRegistry()}
+	router := getRouter(&incHandler, client, prometheus.NewRegistry())
 	go incHandler.Registry.run()
 	defer close(incHandler.Registry.done)
+	if instrumented, ok := store.(*InstrumentedStore); ok {
+		if ms, ok := instrumented.s.(*MongoStore); ok {
+			ms.DropAll(context.Background())
+		}
+	}
+
 	rec1 := httptest.NewRecorder()
 	body1 := `{"title": "order-service request drop", "service": "order-service", "severity": "SEV1", "opened_by": "Anh Nguyen"}`
 	req1 := httptest.NewRequest("POST", "/incidents", strings.NewReader(body1))
@@ -250,11 +279,18 @@ func TestUpdateIncident(t *testing.T) {
 }
 
 func TestAddTimelineEntry(t *testing.T) {
-	memoryStore := MemoryStore{incidents: make(map[string]Incident)}
-	incHandler := &IncidentHandler{Store: &memoryStore, Registry: NewRegistry()}
-	router := getRouter(incHandler)
+	config := loadConfig()
+	client, store := NewStore(config)
+	incHandler := IncidentHandler{Store: store, Registry: NewRegistry()}
+	router := getRouter(&incHandler, client, prometheus.NewRegistry())
 	go incHandler.Registry.run()
 	defer close(incHandler.Registry.done)
+	if instrumented, ok := store.(*InstrumentedStore); ok {
+		if ms, ok := instrumented.s.(*MongoStore); ok {
+			ms.DropAll(context.Background())
+		}
+	}
+
 	rec1 := httptest.NewRecorder()
 	body1 := `{"title": "order-service request drop", "service": "order-service", "severity": "SEV1", "opened_by": "Anh Nguyen"}`
 	req1 := httptest.NewRequest("POST", "/incidents", strings.NewReader(body1))
@@ -349,11 +385,18 @@ func TestAddTimelineEntry(t *testing.T) {
 }
 
 func TestHandleIncidentWebSocket(t *testing.T) {
-	memoryStore := MemoryStore{incidents: make(map[string]Incident)}
-	incHandler := &IncidentHandler{Store: &memoryStore, Registry: NewRegistry()}
-	router := getRouter(incHandler)
+	config := loadConfig()
+	client, store := NewStore(config)
+	incHandler := IncidentHandler{Store: store, Registry: NewRegistry()}
+	router := getRouter(&incHandler, client, prometheus.NewRegistry())
 	go incHandler.Registry.run()
 	defer close(incHandler.Registry.done)
+	if instrumented, ok := store.(*InstrumentedStore); ok {
+		if ms, ok := instrumented.s.(*MongoStore); ok {
+			ms.DropAll(context.Background())
+		}
+	}
+
 	srv := httptest.NewServer(router)
 	defer srv.Close()
 
@@ -423,7 +466,7 @@ func TestHandleIncidentWebSocket(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		if string(msg) != `{"type":"state_change","incident_id":"INC-1","update":{"status":"resolved","severity":null,"on_call":null}}` {
+		if string(msg) != `{"type":"incident_updated","incident_id":"INC-1","field":"status","old_value":"triggered","new_value":"resolved"}` {
 			t.Errorf("wrong msg")
 		}
 

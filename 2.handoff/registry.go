@@ -61,7 +61,6 @@ func (r *Registry) joinRegistry(client *Client) {
 	}
 	client.hub = r.hubs[incID]
 	client.hub.register <- client
-
 }
 
 func (r *Registry) leaveRegister(client *Client) {

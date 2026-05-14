@@ -184,7 +184,7 @@ func (m *MongoStore) UpdateIncident(ctx context.Context, incidentId string, upda
 	var inc Incident
 	err := col.FindOneAndUpdate(
 		ctx,
-		bson.M{"id": incidentId},
+		bson.M{"_id": incidentId},
 		bson.M{"$set": fields},
 		opts,
 	).Decode(&inc)

@@ -4,18 +4,26 @@ import (
 	"context"
 	"encoding/json"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"testing"
+
+	"github.com/prometheus/client_golang/prometheus"
 )
 
 func TestMongoCreateIncident(t *testing.T) {
+	os.Setenv("HANDOFF_CONNECT_STRING", "mongodb://127.0.0.1:27017/?directConnection=true")
 	config := loadConfig()
-	mongoStore := NewMongoStore(config.ConnectionString, config.DatabaseName)
-	incHandler := &IncidentHandler{Store: mongoStore, Registry: NewRegistry()}
+	client, mongoStore := NewStore(config)
+	incHandler := IncidentHandler{Store: mongoStore, Registry: NewRegistry()}
+	router := getRouter(&incHandler, client, prometheus.NewRegistry())
 	go incHandler.Registry.run()
 	defer close(incHandler.Registry.done)
-	mongoStore.DropAll(context.Background())
-	router := getRouter(incHandler)
+	if instrumented, ok := mongoStore.(*InstrumentedStore); ok {
+		if ms, ok := instrumented.s.(*MongoStore); ok {
+			ms.DropAll(context.Background())
+		}
+	}
 
 	t.Run("Normal Request", func(t *testing.T) {
 		body := `{"title": "order-service request drop", "service": "order-service", "severity": "SEV1", "opened_by": "Anh Nguyen"}`
@@ -95,13 +103,19 @@ func TestMongoCreateIncident(t *testing.T) {
 }
 
 func TestMongoGetIncident(t *testing.T) {
+	os.Setenv("HANDOFF_CONNECT_STRING", "mongodb://127.0.0.1:27017/?directConnection=true")
 	config := loadConfig()
-	mongoStore := NewMongoStore(config.ConnectionString, config.DatabaseName)
-	incHandler := &IncidentHandler{Store: mongoStore, Registry: NewRegistry()}
+	client, mongoStore := NewStore(config)
+	incHandler := IncidentHandler{Store: mongoStore, Registry: NewRegistry()}
+	router := getRouter(&incHandler, client, prometheus.NewRegistry())
 	go incHandler.Registry.run()
 	defer close(incHandler.Registry.done)
-	mongoStore.DropAll(context.Background())
-	router := getRouter(incHandler)
+	if instrumented, ok := mongoStore.(*InstrumentedStore); ok {
+		if ms, ok := instrumented.s.(*MongoStore); ok {
+			ms.DropAll(context.Background())
+		}
+	}
+
 	rec1 := httptest.NewRecorder()
 	body := `{"title": "order-service request drop", "service": "order-service", "severity": "SEV1", "opened_by": "Anh Nguyen"}`
 	req1 := httptest.NewRequest("POST", "/incidents", strings.NewReader(body))
@@ -159,13 +173,19 @@ func TestMongoGetIncident(t *testing.T) {
 }
 
 func TestMongoListIncident(t *testing.T) {
+	os.Setenv("HANDOFF_CONNECT_STRING", "mongodb://127.0.0.1:27017/?directConnection=true")
 	config := loadConfig()
-	mongoStore := NewMongoStore(config.ConnectionString, config.DatabaseName)
-	incHandler := &IncidentHandler{Store: mongoStore, Registry: NewRegistry()}
+	client, mongoStore := NewStore(config)
+	incHandler := IncidentHandler{Store: mongoStore, Registry: NewRegistry()}
+	router := getRouter(&incHandler, client, prometheus.NewRegistry())
 	go incHandler.Registry.run()
 	defer close(incHandler.Registry.done)
-	mongoStore.DropAll(context.Background())
-	router := getRouter(incHandler)
+	if instrumented, ok := mongoStore.(*InstrumentedStore); ok {
+		if ms, ok := instrumented.s.(*MongoStore); ok {
+			ms.DropAll(context.Background())
+		}
+	}
+
 	rec1 := httptest.NewRecorder()
 	body := `{"title": "order-service request drop", "service": "order-service", "severity": "SEV1", "opened_by": "Anh Nguyen"}`
 	req1 := httptest.NewRequest("POST", "/incidents", strings.NewReader(body))
@@ -217,13 +237,19 @@ func TestMongoListIncident(t *testing.T) {
 }
 
 func TestMongoUpdateIncident(t *testing.T) {
+	os.Setenv("HANDOFF_CONNECT_STRING", "mongodb://127.0.0.1:27017/?directConnection=true")
 	config := loadConfig()
-	mongoStore := NewMongoStore(config.ConnectionString, config.DatabaseName)
-	incHandler := &IncidentHandler{Store: mongoStore, Registry: NewRegistry()}
+	client, mongoStore := NewStore(config)
+	incHandler := IncidentHandler{Store: mongoStore, Registry: NewRegistry()}
+	router := getRouter(&incHandler, client, prometheus.NewRegistry())
 	go incHandler.Registry.run()
 	defer close(incHandler.Registry.done)
-	mongoStore.DropAll(context.Background())
-	router := getRouter(incHandler)
+	if instrumented, ok := mongoStore.(*InstrumentedStore); ok {
+		if ms, ok := instrumented.s.(*MongoStore); ok {
+			ms.DropAll(context.Background())
+		}
+	}
+
 	rec1 := httptest.NewRecorder()
 	body1 := `{"title": "order-service request drop", "service": "order-service", "severity": "SEV1", "opened_by": "Anh Nguyen"}`
 	req1 := httptest.NewRequest("POST", "/incidents", strings.NewReader(body1))
@@ -256,13 +282,19 @@ func TestMongoUpdateIncident(t *testing.T) {
 }
 
 func TestMongoAddTimelineEntry(t *testing.T) {
+	os.Setenv("HANDOFF_CONNECT_STRING", "mongodb://127.0.0.1:27017/?directConnection=true")
 	config := loadConfig()
-	mongoStore := NewMongoStore(config.ConnectionString, config.DatabaseName)
-	incHandler := &IncidentHandler{Store: mongoStore, Registry: NewRegistry()}
+	client, mongoStore := NewStore(config)
+	incHandler := IncidentHandler{Store: mongoStore, Registry: NewRegistry()}
+	router := getRouter(&incHandler, client, prometheus.NewRegistry())
 	go incHandler.Registry.run()
 	defer close(incHandler.Registry.done)
-	mongoStore.DropAll(context.Background())
-	router := getRouter(incHandler)
+	if instrumented, ok := mongoStore.(*InstrumentedStore); ok {
+		if ms, ok := instrumented.s.(*MongoStore); ok {
+			ms.DropAll(context.Background())
+		}
+	}
+
 	rec1 := httptest.NewRecorder()
 	body1 := `{"title": "order-service request drop", "service": "order-service", "severity": "SEV1", "opened_by": "Anh Nguyen"}`
 	req1 := httptest.NewRequest("POST", "/incidents", strings.NewReader(body1))

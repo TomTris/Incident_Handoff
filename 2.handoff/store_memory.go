@@ -70,7 +70,6 @@ func (m *MemoryStore) AddEntry(ctx context.Context, incidentID string, entry Tim
 func (m *MemoryStore) ListIncidents(ctx context.Context, filter IncidentFilter) ([]Incident, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
-
 	isServiceMatch := func(incident Incident, filter IncidentFilter) bool {
 		return filter.Service == "" || filter.Service == incident.Service
 	}

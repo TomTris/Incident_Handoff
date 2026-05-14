@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"context"
 	"errors"
-	"fmt"
 	"log/slog"
 	"net"
 	"net/http"
@@ -95,14 +94,11 @@ func ObservabilityMiddleware(nextHandler http.Handler) http.Handler {
 					"duration", duration,
 					requestIDKey, requestID,
 				)
-				httpRequestsTotal.WithLabelValues(r.Method, r.URL.Path, strconv.Itoa(wrappedWriter.StatusCode)).Inc()
-				httpDurationSeconds.WithLabelValues(r.Method, r.URL.Path).Observe(duration.Seconds())
 				return
 			}
 
 			httpRequestsTotal.WithLabelValues(r.Method, r.URL.Path, strconv.Itoa(wrappedWriter.StatusCode)).Inc()
 			httpDurationSeconds.WithLabelValues(r.Method, r.URL.Path).Observe(duration.Seconds())
-			fmt.Println(duration.Seconds())
 			slog.Info("request completed",
 				"method", r.Method,
 				"path", r.URL.Path,
