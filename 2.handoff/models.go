@@ -95,7 +95,7 @@ type CreateIncidentRequest struct {
 	Service  string  `json:"service" bson:"service"`
 	Severity string  `json:"severity" bson:"severity"` // SEV1, SEV2, SEV3
 	OpenedBy string  `json:"opened_by" bson:"opened_by"`
-	OnCall   *string `json:"on_call" bson:"on_call"`
+	OnCall   *string `json:"on_call,omitempty" bson:"on_call"`
 }
 
 func (c *CreateIncidentRequest) Validate() error {
@@ -129,13 +129,13 @@ func (c *CreateIncidentRequest) Validate() error {
 }
 
 type HandoffBrief struct {
-	Severity      string          `json:"severity"`
-	Status        string          `json:"status"`
-	Service       string          `json:"service"`
-	TotalEntry    int             `json:"total_entry"`
-	ElapsedMinute int             `json:"elapsed_minute"`
-	TakenActions  []TimelineEntry `json:"taken_actions"`
-	OpenQuestion  []TimelineEntry `json:"open_question"`
-	HandoffCount  int             `json:"handoff_count"`
-	CreatedAt     time.Time       `json:"created_at"`
+	Severity      string    `json:"severity"`
+	Status        string    `json:"status"`
+	Service       string    `json:"service"`
+	TotalEntry    int       `json:"total_entry"`
+	ElapsedMinute int       `json:"elapsed_minute"`
+	TakenActions  int       `json:"taken_actions"`
+	OpenQuestion  int       `json:"open_question"`
+	HandoffCount  int       `json:"handoff_count"`
+	CreatedAt     time.Time `json:"created_at"`
 }

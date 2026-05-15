@@ -34,11 +34,11 @@ func TestBuildHandoffBrief(t *testing.T) {
 		if brief.TotalEntry != 5 {
 			t.Errorf("TotalEntry = %d, want 5", brief.TotalEntry)
 		}
-		if len(brief.TakenActions) != 2 {
-			t.Errorf("TakenActions count = %d, want 2", len(brief.TakenActions))
+		if brief.TakenActions != 2 {
+			t.Errorf("TakenActions count = %d, want 2", brief.TakenActions)
 		}
-		if len(brief.OpenQuestion) != 1 {
-			t.Errorf("OpenQuestion count = %d, want 1", len(brief.OpenQuestion))
+		if brief.OpenQuestion != 1 {
+			t.Errorf("OpenQuestion count = %d, want 1", brief.OpenQuestion)
 		}
 		if brief.ElapsedMinute < 29 || brief.ElapsedMinute > 31 {
 			t.Errorf("ElapsedMinute = %d, want ~30", brief.ElapsedMinute)
@@ -61,11 +61,11 @@ func TestBuildHandoffBrief(t *testing.T) {
 		if brief.TotalEntry != 0 {
 			t.Errorf("TotalEntry = %d, want 0", brief.TotalEntry)
 		}
-		if len(brief.TakenActions) != 0 {
-			t.Errorf("TakenActions count = %d, want 0", len(brief.TakenActions))
+		if brief.TakenActions != 0 {
+			t.Errorf("TakenActions count = %d, want 0", brief.TakenActions)
 		}
-		if len(brief.OpenQuestion) != 0 {
-			t.Errorf("OpenQuestion count = %d, want 0", len(brief.OpenQuestion))
+		if brief.OpenQuestion != 0 {
+			t.Errorf("OpenQuestion count = %d, want 0", brief.OpenQuestion)
 		}
 	})
 

@@ -5,8 +5,8 @@ import (
 )
 
 func buildHandoffBrief(inc Incident) HandoffBrief {
-	actions := []TimelineEntry{}
-	openQuestions := []TimelineEntry{}
+	actions := 0
+	openQuestions := 0
 	author := ""
 	handoffCount := 0
 	for _, entry := range inc.Entries {
@@ -16,9 +16,9 @@ func buildHandoffBrief(inc Incident) HandoffBrief {
 		}
 		switch entry.Type {
 		case ACTION:
-			actions = append(actions, entry)
+			actions++
 		case OPEN_QUESTION:
-			openQuestions = append(openQuestions, entry)
+			openQuestions++
 		}
 	}
 
