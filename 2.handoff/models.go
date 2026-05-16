@@ -27,13 +27,16 @@ type TimelineEntry struct {
 }
 
 func (c *TimelineEntry) Validate() error {
-	if strings.TrimSpace(c.Author) == "" {
+	c.Author = strings.TrimSpace(c.Author)
+	if c.Author == "" {
 		return ErrNoAuthor
 	}
-	if validEntryTypes[strings.TrimSpace(c.Type)] == false {
+	c.Type = strings.TrimSpace(c.Type)
+	if validEntryTypes[c.Type] == false {
 		return ErrBadEntryType
 	}
-	if strings.TrimSpace(c.Text) == "" {
+	c.Text = strings.TrimSpace(c.Text)
+	if c.Text == "" {
 		return ErrNoText
 	}
 	return nil
@@ -45,29 +48,46 @@ type IncidentFilter struct {
 }
 
 func (f *IncidentFilter) Validate() error {
-	if f.Status != "" && !IncidentStatus[strings.TrimSpace(f.Status)] {
+	f.Status = strings.TrimSpace(f.Status)
+	f.Service = strings.TrimSpace(f.Service)
+	if f.Status != "" && !IncidentStatus[f.Status] {
 		return ErrBadIncidentStatus
 	}
 	return nil
 }
 
 type IncidentUpdate struct {
-	Status   *string `json:"status" bson:"status"`
-	Severity *string `json:"severity" bson:"severity"`
-	OnCall   *string `json:"on_call" bson:"on_call"`
+	Status   *string `json:"status,omitempty" bson:"status"`
+	Severity *string `json:"severity,omitempty" bson:"severity"`
+	OnCall   *string `json:"on_call,omitempty" bson:"on_call"`
 }
 
 func (f *IncidentUpdate) Validate() error {
-	if f.Status != nil && IncidentStatus[strings.TrimSpace(*f.Status)] == false {
-		return ErrBadIncidentStatus
+	switch {
+	case f.Status != nil:
+		trimmed := strings.TrimSpace(*f.Status)
+		if IncidentStatus[trimmed] == false {
+			return ErrBadIncidentStatus
+		}
+		*f = IncidentUpdate{Status: &trimmed}
+		return nil
+	case f.Severity != nil:
+		trimmed := strings.TrimSpace(*f.Severity)
+		if IncidentSeverity[trimmed] == false {
+			return ErrInvalidSeverity
+		}
+		*f = IncidentUpdate{Severity: &trimmed}
+		return nil
+	case f.OnCall != nil:
+		trimmed := strings.TrimSpace(*f.OnCall)
+		if trimmed == "" {
+			return ErrOnCall
+		}
+		*f = IncidentUpdate{OnCall: &trimmed}
+		return nil
+	default:
+		return ErrBadRequest
 	}
-	if f.Severity != nil && IncidentSeverity[strings.TrimSpace(*f.Severity)] == false {
-		return ErrInvalidSeverity
-	}
-	if f.OnCall != nil && strings.TrimSpace(*f.OnCall) == "" {
-		return ErrOnCall
-	}
-	return nil
 }
 
 type CreateIncidentRequest struct {
@@ -75,35 +95,47 @@ type CreateIncidentRequest struct {
 	Service  string  `json:"service" bson:"service"`
 	Severity string  `json:"severity" bson:"severity"` // SEV1, SEV2, SEV3
 	OpenedBy string  `json:"opened_by" bson:"opened_by"`
-	OnCall   *string `json:"on_call" bson:"on_call"`
+	OnCall   *string `json:"on_call,omitempty" bson:"on_call"`
 }
 
 func (c *CreateIncidentRequest) Validate() error {
-	if strings.TrimSpace(c.Title) == "" {
+	c.Title = strings.TrimSpace(c.Title)
+	if c.Title == "" {
 		return ErrNoTitle
 	}
-	if strings.TrimSpace(c.Service) == "" {
+
+	c.Service = strings.TrimSpace(c.Service)
+	if c.Service == "" {
 		return ErrNoService
 	}
-	if IncidentSeverity[strings.TrimSpace(c.Severity)] == false {
+
+	c.Severity = strings.TrimSpace(c.Severity)
+	if IncidentSeverity[c.Severity] == false {
 		return ErrInvalidSeverity
 	}
-	if strings.TrimSpace(c.OpenedBy) == "" {
+
+	c.OpenedBy = strings.TrimSpace(c.OpenedBy)
+	if c.OpenedBy == "" {
 		return ErrOpenedBy
 	}
-	if c.OnCall != nil && strings.TrimSpace(*c.OnCall) == "" {
-		return ErrOnCall
+
+	if c.OnCall != nil {
+		*c.OnCall = strings.TrimSpace(*c.OnCall)
+		if *c.OnCall == "" {
+			return ErrOnCall
+		}
 	}
 	return nil
 }
 
 type HandoffBrief struct {
-	Severity      string          `json:"severity" bson:"severity"`
-	Status        string          `json:"status" bson:"status"`
-	Service       string          `json:"service" bson:"service"`
-	TotalEntry    int             `json:"total_entry" bson:"total_entry"`
-	ElapsedMinute int             `json:"elapsed_minute" bson:"elapsed_minute"`
-	TakenActions  []TimelineEntry `json:"taken_actions" bson:"taken_actions"`
-	OpenQuestion  []TimelineEntry `json:"open_question" bson:"open_question"`
-	CreatedAt     time.Time       `json:"created_at" bson:"created_at"`
+	Severity      string    `json:"severity"`
+	Status        string    `json:"status"`
+	Service       string    `json:"service"`
+	TotalEntry    int       `json:"total_entry"`
+	ElapsedMinute int       `json:"elapsed_minute"`
+	TakenActions  int       `json:"taken_actions"`
+	OpenQuestion  int       `json:"open_question"`
+	HandoffCount  int       `json:"handoff_count"`
+	CreatedAt     time.Time `json:"created_at"`
 }

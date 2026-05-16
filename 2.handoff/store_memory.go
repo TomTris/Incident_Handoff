@@ -70,7 +70,6 @@ func (m *MemoryStore) AddEntry(ctx context.Context, incidentID string, entry Tim
 func (m *MemoryStore) ListIncidents(ctx context.Context, filter IncidentFilter) ([]Incident, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
-
 	isServiceMatch := func(incident Incident, filter IncidentFilter) bool {
 		return filter.Service == "" || filter.Service == incident.Service
 	}
@@ -92,24 +91,26 @@ func (m *MemoryStore) ListIncidents(ctx context.Context, filter IncidentFilter) 
 	return array, nil
 }
 
-func (m *MemoryStore) UpdateIncident(ctx context.Context, id string, update IncidentUpdate) error {
+func (m *MemoryStore) UpdateIncident(ctx context.Context, id string, update IncidentUpdate) (Incident, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
 	incident, ok := m.incidents[id]
 	if ok == false {
-		return ErrIncidentNotFound
+		return incident, ErrIncidentNotFound
 	}
-	if update.Status != nil {
+	incBefore := incident
+
+	switch {
+	case update.Status != nil:
 		incident.Status = *update.Status
-	}
-	if update.Severity != nil {
+	case update.Severity != nil:
 		incident.Severity = *update.Severity
-	}
-	if update.OnCall != nil {
+	case update.OnCall != nil:
 		incident.OnCall = *update.OnCall
 	}
+
 	incident.UpdatedAt = time.Now()
 	m.incidents[id] = incident
-	return nil
+	return incBefore, nil
 }

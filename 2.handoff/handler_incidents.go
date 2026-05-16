@@ -25,18 +25,33 @@ func marshalNewEntryEvent(incidentID string, entry TimelineEntry) json.RawMessag
 	return data
 }
 
-func marshalStateChangeEvent(incidentID string, update IncidentUpdate) json.RawMessage {
-	// One message per changed field
-	// Or one message with all changes — your call
+func marshalIncidentUpdateEvent(incidentID string, incBefore Incident, update IncidentUpdate) json.RawMessage {
 	event := struct {
-		Type       string         `json:"type"`
-		IncidentID string         `json:"incident_id"`
-		Update     IncidentUpdate `json:"update"`
+		Type       string `json:"type"`
+		IncidentID string `json:"incident_id"`
+		Field      string `json:"field"`
+		OldValue   string `json:"old_value"`
+		NewValue   string `json:"new_value"`
 	}{
-		Type:       "state_change",
+		Type:       "incident_updated",
 		IncidentID: incidentID,
-		Update:     update,
 	}
+
+	switch {
+	case update.Status != nil:
+		event.Field = "status"
+		event.OldValue = incBefore.Status
+		event.NewValue = *update.Status
+	case update.Severity != nil:
+		event.Field = "severity"
+		event.OldValue = incBefore.Severity
+		event.NewValue = *update.Severity
+	case update.OnCall != nil:
+		event.Field = "on_call"
+		event.OldValue = incBefore.OnCall
+		event.NewValue = *update.OnCall
+	}
+
 	data, _ := json.Marshal(event)
 	return data
 }
@@ -207,9 +222,6 @@ func (incHandler *IncidentHandler) ListIncidents(w http.ResponseWriter, r *http.
 	writeJSON(w, http.StatusOK, RequestID, filteredIncidents)
 }
 
-// TODO:I can return state before update from UpdateIncident, but it shouldn't be best practice and make the code less clean
-// So i do not do it.
-// Do Change stream in the future instead.
 func (incHandler *IncidentHandler) UpdateIncident(w http.ResponseWriter, r *http.Request) {
 	RequestID := r.Context().Value(requestIDKey).(string)
 	incidentUpdate := IncidentUpdate{}
@@ -232,7 +244,7 @@ func (incHandler *IncidentHandler) UpdateIncident(w http.ResponseWriter, r *http
 		return
 	}
 	incidentID := r.PathValue("id")
-	err = incHandler.Store.UpdateIncident(r.Context(), incidentID, incidentUpdate)
+	incBefore, err := incHandler.Store.UpdateIncident(r.Context(), incidentID, incidentUpdate)
 	if err != nil {
 		if errors.Is(err, ErrIncidentNotFound) {
 			writeError(w, http.StatusNotFound, ErrorMessageJSON{
@@ -251,7 +263,7 @@ func (incHandler *IncidentHandler) UpdateIncident(w http.ResponseWriter, r *http
 	}
 	incHandler.Registry.broadcast <- BroadcastMessage{
 		incidentID: incidentID,
-		msg:        marshalStateChangeEvent(incidentID, incidentUpdate),
+		msg:        marshalIncidentUpdateEvent(incidentID, incBefore, incidentUpdate),
 	}
 	w.WriteHeader(http.StatusNoContent)
 }

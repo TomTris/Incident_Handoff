@@ -666,11 +666,9 @@ State change:
 {
     "type": "state_change",
     "incident_id": "inc-001",
-    "update":{
-      "status":null,
-      "severity":"SEV2",
-      "on_call":null
-    }
+    "field": "severity",
+    "old_value": "SEV1",
+    "new_value": "SEV2"
 }
 ```
 
