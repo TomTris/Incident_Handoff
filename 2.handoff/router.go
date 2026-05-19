@@ -8,7 +8,8 @@ import (
 	"go.mongodb.org/mongo-driver/v2/mongo"
 )
 
-func getRouter(incHandler *IncidentHandler, mongoClient *mongo.Client, promRegistry *prometheus.Registry) http.Handler {
+func getRouter(incHandler *IncidentHandler, flagHander *FlagHandler,
+	mongoClient *mongo.Client, promRegistry *prometheus.Registry) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /incidents", ResponseMiddleware(incHandler.CreateIncident))
 	mux.HandleFunc("POST /incidents/{id}/entries", ResponseMiddleware(incHandler.AddEntry))
@@ -22,10 +23,10 @@ func getRouter(incHandler *IncidentHandler, mongoClient *mongo.Client, promRegis
 	mux.HandleFunc("GET /readyz", readyCheck(mongoClient))
 	mux.Handle("/metrics", promhttp.HandlerFor(promRegistry, promhttp.HandlerOpts{Registry: promRegistry}))
 
-	mux.HandleFunc("POST /flags", incHandler.CreateFlag)
-	mux.HandleFunc("GET /flags", incHandler.ListAllFlag)
-	mux.HandleFunc("PATCH /flags/{name}", incHandler.UpdateFlag)
-	mux.HandleFunc("GET /flags/{name}/evaluate", incHandler.Evaluate)
+	mux.HandleFunc("POST /flags", ResponseMiddleware(flagHander.CreateFlag))
+	mux.HandleFunc("GET /flags", ResponseMiddleware(flagHander.ListAllFlag))
+	mux.HandleFunc("PATCH /flags/{name}", ResponseMiddleware(flagHander.UpdateFlag))
+	mux.HandleFunc("GET /flags/{name}/evaluate", ResponseMiddleware(flagHander.Evaluate))
 	router := RequestIDMiddleware(ObservabilityMiddleware(CORSMiddleware(TimeoutMiddleware(mux))))
 	return router
 }

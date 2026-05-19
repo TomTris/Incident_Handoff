@@ -5,27 +5,10 @@ import (
 	"errors"
 	"testing"
 	"time"
-
-	"go.mongodb.org/mongo-driver/v2/mongo"
-	"go.mongodb.org/mongo-driver/v2/mongo/options"
 )
 
-const connectionDBString = "mongodb://127.0.0.1:27017/?directConnection=true"
-const DBName = "incident_tracker"
-
-func setupMongoTestEnv(t *testing.T) *MongoStore {
-	t.Helper()
-
-	client, err := mongo.Connect(options.Client().ApplyURI(connectionDBString))
-	if err != nil {
-		t.Fatal(err)
-	}
-	mongoStore := NewMongoStore(client, "incident_tracker")
-	mongoStore.DropAll(context.Background())
-	return mongoStore
-}
-func TestMongoStore_CreateIncident(t *testing.T) {
-	m := setupMongoTestEnv(t)
+func TestMemoryStore_CreateIncident(t *testing.T) {
+	m := NewMemoryIncidentStore()
 
 	t.Run("defaults OnCall to OpenedBy", func(t *testing.T) {
 		inc, err := m.CreateIncident(context.Background(), CreateIncidentRequest{
@@ -77,7 +60,7 @@ func TestMongoStore_CreateIncident(t *testing.T) {
 		}
 	})
 
-	t.Run("maps incident fields correctly", func(t *testing.T) {
+	t.Run("map incident fields correcy", func(t *testing.T) {
 		inc, _ := m.CreateIncident(context.Background(), CreateIncidentRequest{
 			Title:    "outage4",
 			Service:  "api",
@@ -98,7 +81,7 @@ func TestMongoStore_CreateIncident(t *testing.T) {
 		}
 	})
 	t.Run("sequential IDs", func(t *testing.T) {
-		m.DropAll(context.Background())
+		m = NewMemoryIncidentStore()
 		inc1, _ := m.CreateIncident(context.Background(), CreateIncidentRequest{
 			Title: "a", Service: "s", Severity: "SEV1", OpenedBy: "x",
 		})
@@ -114,8 +97,8 @@ func TestMongoStore_CreateIncident(t *testing.T) {
 	})
 }
 
-func TestMongoStore_UpdateIncident(t *testing.T) {
-	m := setupMongoTestEnv(t)
+func TestMemoryStore_UpdateIncident(t *testing.T) {
+	m := NewMemoryIncidentStore()
 
 	m.CreateIncident(context.Background(), CreateIncidentRequest{
 		Title: "outage", Service: "api", Severity: "SEV1", OpenedBy: "anh",
@@ -198,8 +181,8 @@ func TestMongoStore_UpdateIncident(t *testing.T) {
 	})
 }
 
-func TestMongoStore_AddEntry(t *testing.T) {
-	m := setupMongoTestEnv(t)
+func TestMemoryStore_AddEntry(t *testing.T) {
+	m := NewMemoryIncidentStore()
 
 	m.CreateIncident(context.Background(), CreateIncidentRequest{
 		Title:    "outage",
@@ -225,7 +208,7 @@ func TestMongoStore_AddEntry(t *testing.T) {
 		}
 	})
 	t.Run("sequential entry IDs", func(t *testing.T) {
-		entry, _ := m.AddEntry(context.Background(), "INC1", TimelineEntry{
+		entry, _ := m.AddEntry(context.Background(), "INC-1", TimelineEntry{
 			Author: "anh", Type: "observation", Text: "second entry",
 		})
 		if entry.ID != "TLE-2" {
@@ -257,8 +240,8 @@ func TestMongoStore_AddEntry(t *testing.T) {
 	})
 }
 
-func TestMongoStore_ListIncidents(t *testing.T) {
-	m := setupMongoTestEnv(t)
+func TestMemoryStore_ListIncidents(t *testing.T) {
+	m := NewMemoryIncidentStore()
 
 	m.CreateIncident(context.Background(), CreateIncidentRequest{
 		Title: "a", Service: "api", Severity: "SEV1", OpenedBy: "x",

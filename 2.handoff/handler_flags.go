@@ -6,7 +6,11 @@ import (
 	"net/http"
 )
 
-func (incHandler *IncidentHandler) CreateFlag(w http.ResponseWriter, r *http.Request) (*AppResponse, error) {
+type FlagHandler struct {
+	store FlagStore
+}
+
+func (flagHandler *FlagHandler) CreateFlag(w http.ResponseWriter, r *http.Request) (*AppResponse, error) {
 	f := FeatureFlag{}
 	if err := json.NewDecoder(r.Body).Decode(&f); err != nil {
 		return nil, BadRequest(err)
@@ -14,7 +18,7 @@ func (incHandler *IncidentHandler) CreateFlag(w http.ResponseWriter, r *http.Req
 	if err := f.Validate(); err != nil {
 		return nil, BadRequest(err)
 	}
-	if err := incHandler.FlagStore.Create(f); err != nil {
+	if err := flagHandler.store.Create(f); err != nil {
 		if errors.Is(err, ErrFlagAlreadyExist) {
 			return nil, Conflict(err)
 		}
@@ -24,7 +28,7 @@ func (incHandler *IncidentHandler) CreateFlag(w http.ResponseWriter, r *http.Req
 	return newAppResponse(http.StatusCreated, f), nil
 }
 
-func (incHandler *IncidentHandler) UpdateFlag(w http.ResponseWriter, r *http.Request) (*AppResponse, error) {
+func (flagHandler *FlagHandler) UpdateFlag(w http.ResponseWriter, r *http.Request) (*AppResponse, error) {
 	u := FeatureFlagUpdate{}
 	if err := json.NewDecoder(r.Body).Decode(&u); err != nil {
 		return nil, BadRequest(err)
@@ -35,7 +39,7 @@ func (incHandler *IncidentHandler) UpdateFlag(w http.ResponseWriter, r *http.Req
 		return nil, BadRequest(err)
 	}
 
-	if err := incHandler.FlagStore.Update(u); err != nil {
+	if err := flagHandler.store.Update(u); err != nil {
 		if errors.Is(err, ErrFlagNotfound) {
 			return nil, NotFound(err)
 		}
@@ -45,15 +49,15 @@ func (incHandler *IncidentHandler) UpdateFlag(w http.ResponseWriter, r *http.Req
 	return newAppResponse(http.StatusNoContent, nil), nil
 }
 
-func (incHandler *IncidentHandler) ListAllFlag(w http.ResponseWriter, r *http.Request) (*AppResponse, error) {
-	allFlags, err := incHandler.FlagStore.AllFlags()
+func (flagHandler *FlagHandler) ListAllFlag(w http.ResponseWriter, r *http.Request) (*AppResponse, error) {
+	allFlags, err := flagHandler.store.AllFlags()
 	if err != nil {
 		return nil, InternalServerError(err)
 	}
 	return newAppResponse(http.StatusOK, allFlags), nil
 }
 
-func (incHandler *IncidentHandler) Evaluate(w http.ResponseWriter, r *http.Request) (*AppResponse, error) {
+func (flagHandler *FlagHandler) Evaluate(w http.ResponseWriter, r *http.Request) (*AppResponse, error) {
 	flagName := r.PathValue("name")
 	userID := r.URL.Query().Get("user_id")
 
@@ -61,7 +65,7 @@ func (incHandler *IncidentHandler) Evaluate(w http.ResponseWriter, r *http.Reque
 		return nil, BadRequest(errors.New("empty user_id"))
 	}
 
-	flagAnswer, err := incHandler.FlagStore.Evaluate(flagName, userID)
+	flagAnswer, err := flagHandler.store.Evaluate(flagName, userID)
 	if err != nil {
 		if errors.Is(err, ErrFlagNotfound) {
 			return nil, NotFound(err)

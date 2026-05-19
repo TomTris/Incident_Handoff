@@ -6,10 +6,14 @@ import (
 	"net/http"
 )
 
+type FlagEvaluator interface {
+	Evaluate(flagName string, userID string) (*FlagEvaluateAnswer, error)
+}
+
 type IncidentHandler struct {
-	Store     Store
-	Registry  Registry
-	FlagStore FlagStore
+	IncidentStore IncidentStore
+	Registry      Registry
+	FlagEvaluator FlagEvaluator
 }
 
 func marshalNewEntryEvent(incidentID string, entry TimelineEntry) json.RawMessage {
@@ -49,7 +53,7 @@ func (incHandler *IncidentHandler) CreateIncident(w http.ResponseWriter, r *http
 		return nil, BadRequest(err)
 	}
 
-	createdIncident, err := incHandler.Store.CreateIncident(r.Context(), req)
+	createdIncident, err := incHandler.IncidentStore.CreateIncident(r.Context(), req)
 	if err != nil {
 		return nil, InternalServerError(err)
 	}
@@ -59,7 +63,7 @@ func (incHandler *IncidentHandler) CreateIncident(w http.ResponseWriter, r *http
 
 func (incHandler *IncidentHandler) GetIncident(w http.ResponseWriter, r *http.Request) (*AppResponse, error) {
 	incidentID := r.PathValue("id")
-	inc, err := incHandler.Store.GetIncident(r.Context(), incidentID)
+	inc, err := incHandler.IncidentStore.GetIncident(r.Context(), incidentID)
 	if err != nil {
 		if errors.Is(err, ErrIncidentNotFound) {
 			return nil, BadRequest(err)
@@ -78,7 +82,7 @@ func (incHandler *IncidentHandler) AddEntry(w http.ResponseWriter, r *http.Reque
 		return nil, BadRequest(err)
 	}
 	incidentID := r.PathValue("id")
-	newEntry, err := incHandler.Store.AddEntry(r.Context(), incidentID, timelineEntry)
+	newEntry, err := incHandler.IncidentStore.AddEntry(r.Context(), incidentID, timelineEntry)
 	if err != nil {
 		if errors.Is(err, ErrIncidentNotFound) {
 			return nil, NotFound(err)
@@ -105,7 +109,7 @@ func (incHandler *IncidentHandler) ListIncidents(w http.ResponseWriter, r *http.
 		return nil, BadRequest(err)
 	}
 
-	filteredIncidents, err := incHandler.Store.ListIncidents(r.Context(), incidentFilter)
+	filteredIncidents, err := incHandler.IncidentStore.ListIncidents(r.Context(), incidentFilter)
 	if err != nil {
 		return nil, InternalServerError(err)
 	}
@@ -122,7 +126,7 @@ func (incHandler *IncidentHandler) UpdateIncident(w http.ResponseWriter, r *http
 	}
 
 	incidentID := r.PathValue("id")
-	incAfter, err := incHandler.Store.UpdateIncident(r.Context(), incidentID, incidentUpdate)
+	incAfter, err := incHandler.IncidentStore.UpdateIncident(r.Context(), incidentID, incidentUpdate)
 	if err != nil {
 		if errors.Is(err, ErrIncidentNotFound) {
 			return nil, NotFound(err)
@@ -139,7 +143,7 @@ func (incHandler *IncidentHandler) UpdateIncident(w http.ResponseWriter, r *http
 
 func (incHandler *IncidentHandler) GetHandoffBrief(w http.ResponseWriter, r *http.Request) (*AppResponse, error) {
 	incidentID := r.PathValue("id")
-	inc, err := incHandler.Store.GetIncident(r.Context(), incidentID)
+	inc, err := incHandler.IncidentStore.GetIncident(r.Context(), incidentID)
 	if err != nil {
 		if errors.Is(err, ErrIncidentNotFound) {
 			return nil, NotFound(err)
@@ -147,7 +151,7 @@ func (incHandler *IncidentHandler) GetHandoffBrief(w http.ResponseWriter, r *htt
 		return nil, InternalServerError(err)
 	}
 	userID := r.URL.Query().Get("user_id")
-	body := buildHandoffBrief(inc, &incHandler.FlagStore, userID)
+	body := buildHandoffBrief(inc, incHandler.FlagEvaluator, userID)
 	return newAppResponse(http.StatusOK, body), nil
 }
 

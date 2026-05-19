@@ -4,7 +4,7 @@ import (
 	"time"
 )
 
-func buildHandoffBrief(inc Incident, flagStore *FlagStore, userID string) HandoffBrief {
+func buildHandoffBrief(inc Incident, flagEvaluator FlagEvaluator, userID string) HandoffBrief {
 	actionsList := []TimelineEntry{}
 	openQuestionsList := []TimelineEntry{}
 	author := ""
@@ -38,8 +38,8 @@ func buildHandoffBrief(inc Incident, flagStore *FlagStore, userID string) Handof
 		CreatedAt:     inc.CreatedAt,
 	}
 
-	if flagStore != nil {
-		flagAnswer, err := flagStore.Evaluate("detailed_handoff_brief", userID)
+	if flagEvaluator != nil {
+		flagAnswer, err := flagEvaluator.Evaluate("detailed_handoff_brief", userID)
 		if err == nil && flagAnswer.InRollout == true && *flagAnswer.Variant == "detailed" {
 			brief.OpenQuestionList = &openQuestionsList
 			brief.TakenActionsList = &actionsList

@@ -14,15 +14,15 @@ import (
 	"go.mongodb.org/mongo-driver/v2/mongo/options"
 )
 
-type MongoStore struct {
+type MongoIncidentStore struct {
 	db *mongo.Database
 }
 
-func (m *MongoStore) DropAll(ctx context.Context) error {
+func (m *MongoIncidentStore) DropAll(ctx context.Context) error {
 	return m.db.Drop(ctx)
 }
 
-func NewMongoStore(client *mongo.Client, DBName string) *MongoStore {
+func NewMongoIncidentStore(client *mongo.Client, DBName string) *MongoIncidentStore {
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 	err := client.Ping(ctx, nil)
@@ -47,10 +47,10 @@ func NewMongoStore(client *mongo.Client, DBName string) *MongoStore {
 		}},
 	})
 	slog.Info("schema/indexes ensured")
-	return &MongoStore{db: db}
+	return &MongoIncidentStore{db: db}
 }
 
-func (m *MongoStore) nextID(ctx context.Context, name string, prefix string) (string, error) {
+func (m *MongoIncidentStore) nextID(ctx context.Context, name string, prefix string) (string, error) {
 	col := m.db.Collection(CollectionCounters)
 	filter := bson.M{"_id": name}
 	update := bson.M{"$inc": bson.M{"seq": 1}}
@@ -68,7 +68,7 @@ func (m *MongoStore) nextID(ctx context.Context, name string, prefix string) (st
 	return prefix + strconv.Itoa(result.Seq), nil
 }
 
-func (m *MongoStore) CreateIncident(ctx context.Context, req CreateIncidentRequest) (Incident, error) {
+func (m *MongoIncidentStore) CreateIncident(ctx context.Context, req CreateIncidentRequest) (Incident, error) {
 	id, err := m.nextID(ctx, "incident", incidentIDPrefix)
 	if err != nil {
 		return Incident{}, errors.New("Failed to get next incident Id: " + err.Error())
@@ -94,7 +94,7 @@ func (m *MongoStore) CreateIncident(ctx context.Context, req CreateIncidentReque
 	return inc, nil
 }
 
-func (m *MongoStore) GetIncident(ctx context.Context, id string) (Incident, error) {
+func (m *MongoIncidentStore) GetIncident(ctx context.Context, id string) (Incident, error) {
 	col := m.db.Collection(CollectionIncidents)
 	filter := bson.M{"_id": id}
 	var inc Incident
@@ -110,7 +110,7 @@ func (m *MongoStore) GetIncident(ctx context.Context, id string) (Incident, erro
 
 // TODO: This might cause race, find another method in critical cases (banking, ...)
 // Consequence of current method: might send wrong error code, but at least data is safe, not so critical
-func (m *MongoStore) AddEntry(ctx context.Context, incidentID string, entry TimelineEntry) (TimelineEntry, error) {
+func (m *MongoIncidentStore) AddEntry(ctx context.Context, incidentID string, entry TimelineEntry) (TimelineEntry, error) {
 	id, err := m.nextID(ctx, "timeline_entry", entryIDPrefix)
 	if err != nil {
 		return entry, err
@@ -142,7 +142,7 @@ func (m *MongoStore) AddEntry(ctx context.Context, incidentID string, entry Time
 	return entry, nil
 }
 
-func (m *MongoStore) ListIncidents(ctx context.Context, incFilter IncidentFilter) ([]Incident, error) {
+func (m *MongoIncidentStore) ListIncidents(ctx context.Context, incFilter IncidentFilter) ([]Incident, error) {
 	dbFilter := bson.M{}
 	if incFilter.Service != "" {
 		dbFilter["service"] = incFilter.Service
@@ -174,7 +174,7 @@ func (m *MongoStore) ListIncidents(ctx context.Context, incFilter IncidentFilter
 	return incidents, err
 }
 
-func (m *MongoStore) UpdateIncident(ctx context.Context, incidentId string, update IncidentUpdate) (Incident, error) {
+func (m *MongoIncidentStore) UpdateIncident(ctx context.Context, incidentId string, update IncidentUpdate) (Incident, error) {
 	fields := bson.M{"updated_at": time.Now()}
 
 	if update.Status != nil {

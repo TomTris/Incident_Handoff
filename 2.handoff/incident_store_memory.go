@@ -8,18 +8,18 @@ import (
 	"time"
 )
 
-type MemoryStore struct {
+type MemoryIncidentStore struct {
 	mu                  sync.RWMutex
 	incidents           map[string]Incident
 	nextIncidentID      int
 	nextEntryTimelineID int
 }
 
-func NewMemoryStore() *MemoryStore {
-	return &MemoryStore{incidents: make(map[string]Incident)}
+func NewMemoryIncidentStore() *MemoryIncidentStore {
+	return &MemoryIncidentStore{incidents: make(map[string]Incident)}
 }
 
-func (m *MemoryStore) CreateIncident(ctx context.Context, req CreateIncidentRequest) (Incident, error) {
+func (m *MemoryIncidentStore) CreateIncident(ctx context.Context, req CreateIncidentRequest) (Incident, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -40,7 +40,7 @@ func (m *MemoryStore) CreateIncident(ctx context.Context, req CreateIncidentRequ
 	return inc, nil
 }
 
-func (m *MemoryStore) GetIncident(ctx context.Context, id string) (Incident, error) {
+func (m *MemoryIncidentStore) GetIncident(ctx context.Context, id string) (Incident, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
@@ -51,7 +51,7 @@ func (m *MemoryStore) GetIncident(ctx context.Context, id string) (Incident, err
 	return inc, nil
 }
 
-func (m *MemoryStore) AddEntry(ctx context.Context, incidentID string, entry TimelineEntry) (TimelineEntry, error) {
+func (m *MemoryIncidentStore) AddEntry(ctx context.Context, incidentID string, entry TimelineEntry) (TimelineEntry, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -71,7 +71,7 @@ func (m *MemoryStore) AddEntry(ctx context.Context, incidentID string, entry Tim
 	return entry, nil
 }
 
-func (m *MemoryStore) ListIncidents(ctx context.Context, filter IncidentFilter) ([]Incident, error) {
+func (m *MemoryIncidentStore) ListIncidents(ctx context.Context, filter IncidentFilter) ([]Incident, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	isServiceMatch := func(incident Incident, filter IncidentFilter) bool {
@@ -96,7 +96,7 @@ func (m *MemoryStore) ListIncidents(ctx context.Context, filter IncidentFilter) 
 }
 
 // Return incident After
-func (m *MemoryStore) UpdateIncident(ctx context.Context, id string, update IncidentUpdate) (Incident, error) {
+func (m *MemoryIncidentStore) UpdateIncident(ctx context.Context, id string, update IncidentUpdate) (Incident, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 

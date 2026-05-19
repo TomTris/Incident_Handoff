@@ -96,7 +96,10 @@ func TestFlagStore_AllFlags(t *testing.T) {
 	flagStore := CreateFlagStore()
 
 	t.Run("empty store", func(t *testing.T) {
-		flags := flagStore.AllFlags()
+		flags, err := flagStore.AllFlags()
+		if err != nil {
+			t.Errorf("expected no error")
+		}
 		if len(flags) != 0 {
 			t.Errorf("expected 0, got %d", len(flags))
 		}
@@ -105,7 +108,10 @@ func TestFlagStore_AllFlags(t *testing.T) {
 	t.Run("returns all", func(t *testing.T) {
 		flagStore.Create(FeatureFlag{Name: "a", Variants: []string{"v1"}})
 		flagStore.Create(FeatureFlag{Name: "b", Variants: []string{"v1"}})
-		flags := flagStore.AllFlags()
+		flags, err := flagStore.AllFlags()
+		if err != nil {
+			t.Errorf("expected no error")
+		}
 		if len(flags) != 2 {
 			t.Errorf("expected 2, got %d", len(flags))
 		}
