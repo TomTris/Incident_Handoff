@@ -358,7 +358,7 @@ func TestMongoStore_ListIncidents(t *testing.T) {
 			t.Errorf("expected INC-1, got %s", list[0].ID)
 		}
 		if list[1].ID != "INC-2" {
-			t.Errorf("expected INC-2, got %s", list[0].ID)
+			t.Errorf("expected INC-2, got %s", list[1].ID)
 		}
 	})
 

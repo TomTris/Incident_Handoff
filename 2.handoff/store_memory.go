@@ -19,18 +19,22 @@ func NewMemoryStore() *MemoryStore {
 	return &MemoryStore{incidents: make(map[string]Incident)}
 }
 
-func (m *MemoryStore) CreateIncident(ctx context.Context, inc Incident) (Incident, error) {
+func (m *MemoryStore) CreateIncident(ctx context.Context, req CreateIncidentRequest) (Incident, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
 	m.nextIncidentID++
-	inc.ID = incidentIDPrefix + strconv.Itoa(m.nextIncidentID)
-	inc.Status = TRIGGERED
-	inc.CreatedAt = time.Now()
-	inc.UpdatedAt = time.Now()
-	inc.Entries = []TimelineEntry{}
-	if inc.OnCall == "" {
-		inc.OnCall = inc.OpenedBy
+	inc := Incident{
+		ID:        incidentIDPrefix + strconv.Itoa(m.nextIncidentID),
+		Title:     req.Title,
+		Service:   req.Service,
+		Severity:  req.Severity,
+		OpenedBy:  req.OpenedBy,
+		OnCall:    derefOrDefault(req.OnCall, req.OpenedBy),
+		Status:    TRIGGERED,
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
+		Entries:   []TimelineEntry{},
 	}
 	m.incidents[inc.ID] = inc
 	return inc, nil
@@ -91,6 +95,7 @@ func (m *MemoryStore) ListIncidents(ctx context.Context, filter IncidentFilter) 
 	return array, nil
 }
 
+// Return incident After
 func (m *MemoryStore) UpdateIncident(ctx context.Context, id string, update IncidentUpdate) (Incident, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -99,18 +104,18 @@ func (m *MemoryStore) UpdateIncident(ctx context.Context, id string, update Inci
 	if ok == false {
 		return incident, ErrIncidentNotFound
 	}
-	incBefore := incident
 
-	switch {
-	case update.Status != nil:
+	if update.Status != nil {
 		incident.Status = *update.Status
-	case update.Severity != nil:
+	}
+	if update.Severity != nil {
 		incident.Severity = *update.Severity
-	case update.OnCall != nil:
+	}
+	if update.OnCall != nil {
 		incident.OnCall = *update.OnCall
 	}
 
 	incident.UpdatedAt = time.Now()
 	m.incidents[id] = incident
-	return incBefore, nil
+	return incident, nil
 }
