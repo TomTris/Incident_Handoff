@@ -13,8 +13,6 @@ import (
 const connectionDBString = "mongodb://127.0.0.1:27017/?directConnection=true"
 const DBName = "incident_tracker"
 
-func strPtr(s string) *string { return &s }
-
 func setupMongoTestEnv(t *testing.T) *MongoStore {
 	t.Helper()
 
@@ -125,7 +123,7 @@ func TestMongoStore_UpdateIncident(t *testing.T) {
 
 	t.Run("update status", func(t *testing.T) {
 		inc, err := m.UpdateIncident(context.Background(), "INC-1", IncidentUpdate{
-			Status: strPtr(RESOLVED),
+			Status: new(RESOLVED),
 		})
 		if err != nil {
 			t.Fatal(err)
@@ -137,7 +135,7 @@ func TestMongoStore_UpdateIncident(t *testing.T) {
 
 	t.Run("update severity", func(t *testing.T) {
 		inc, err := m.UpdateIncident(context.Background(), "INC-1", IncidentUpdate{
-			Severity: strPtr("SEV2"),
+			Severity: new("SEV2"),
 		})
 		if err != nil {
 			t.Fatal(err)
@@ -149,7 +147,7 @@ func TestMongoStore_UpdateIncident(t *testing.T) {
 
 	t.Run("update on_call", func(t *testing.T) {
 		inc, err := m.UpdateIncident(context.Background(), "INC-1", IncidentUpdate{
-			OnCall: strPtr("tom"),
+			OnCall: new("tom"),
 		})
 		if err != nil {
 			t.Fatal(err)
@@ -161,9 +159,9 @@ func TestMongoStore_UpdateIncident(t *testing.T) {
 
 	t.Run("multiple fields at once", func(t *testing.T) {
 		inc, err := m.UpdateIncident(context.Background(), "INC-1", IncidentUpdate{
-			Status:   strPtr(TRIGGERED),
-			Severity: strPtr("SEV3"),
-			OnCall:   strPtr("carl"),
+			Status:   new(TRIGGERED),
+			Severity: new("SEV3"),
+			OnCall:   new("carl"),
 		})
 		if err != nil {
 			t.Fatal(err)
@@ -183,7 +181,7 @@ func TestMongoStore_UpdateIncident(t *testing.T) {
 		before, _ := m.GetIncident(context.Background(), "INC-1")
 		time.Sleep(10 * time.Millisecond) //Give Buffer to compare updated_at
 		after, _ := m.UpdateIncident(context.Background(), "INC-1", IncidentUpdate{
-			Status: strPtr(TRIGGERED),
+			Status: new(TRIGGERED),
 		})
 		if after.UpdatedAt.After(before.UpdatedAt) == false {
 			t.Error("UpdatedAt should advance")
@@ -192,7 +190,7 @@ func TestMongoStore_UpdateIncident(t *testing.T) {
 
 	t.Run("not found", func(t *testing.T) {
 		_, err := m.UpdateIncident(context.Background(), "INC-999", IncidentUpdate{
-			Status: strPtr(RESOLVED),
+			Status: new(RESOLVED),
 		})
 		if !errors.Is(err, ErrIncidentNotFound) {
 			t.Errorf("expected ErrIncidentNotFound, got %v", err)
@@ -247,7 +245,7 @@ func TestMongoStore_AddEntry(t *testing.T) {
 	t.Run("conflict on resolved incident", func(t *testing.T) {
 		// resolve the incident first
 		m.UpdateIncident(context.Background(), "INC-1", IncidentUpdate{
-			Status: strPtr(RESOLVED),
+			Status: new(RESOLVED),
 		})
 
 		_, err := m.AddEntry(context.Background(), "INC-1", TimelineEntry{
@@ -266,18 +264,18 @@ func TestMongoStore_ListIncidents(t *testing.T) {
 		Title: "a", Service: "api", Severity: "SEV1", OpenedBy: "x",
 	})
 	m.CreateIncident(context.Background(), CreateIncidentRequest{
-		Title: "b", Service: "chatbot", Severity: "SEV2", OpenedBy: "x", OnCall: strPtr("anh"),
+		Title: "b", Service: "chatbot", Severity: "SEV2", OpenedBy: "x", OnCall: new("anh"),
 	})
 	m.CreateIncident(context.Background(), CreateIncidentRequest{
-		Title: "c", Service: "biling", Severity: "SEV1", OpenedBy: "y", OnCall: strPtr("anh"),
+		Title: "c", Service: "biling", Severity: "SEV1", OpenedBy: "y", OnCall: new("anh"),
 	})
 	m.CreateIncident(context.Background(), CreateIncidentRequest{
 		Title: "d", Service: "api", Severity: "SEV3", OpenedBy: "z",
 	})
 
-	m.UpdateIncident(context.Background(), "INC-1", IncidentUpdate{Status: strPtr(RESOLVED)})
-	m.UpdateIncident(context.Background(), "INC-2", IncidentUpdate{Status: strPtr(RESOLVED)})
-	m.UpdateIncident(context.Background(), "INC-3", IncidentUpdate{Status: strPtr(INVESTIGATING)})
+	m.UpdateIncident(context.Background(), "INC-1", IncidentUpdate{Status: new(RESOLVED)})
+	m.UpdateIncident(context.Background(), "INC-2", IncidentUpdate{Status: new(RESOLVED)})
+	m.UpdateIncident(context.Background(), "INC-3", IncidentUpdate{Status: new(INVESTIGATING)})
 
 	t.Run("no filter returns all", func(t *testing.T) {
 		list, err := m.ListIncidents(context.Background(), IncidentFilter{})

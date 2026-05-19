@@ -1,16 +1,8 @@
 package main
 
-// import (
-// 	"context"
-// 	"encoding/json"
-// 	"net/http"
-// 	"net/http/httptest"
-// 	"strings"
-// 	"testing"
+// func TestMarshalIncidentUpdateEvent(t *testing.T) {
 
-// 	"github.com/gorilla/websocket"
-// 	"github.com/prometheus/client_golang/prometheus"
-// )
+// }
 
 // func TestCreateIncident(t *testing.T) {
 // 	config := loadConfig()

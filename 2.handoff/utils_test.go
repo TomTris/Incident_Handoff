@@ -11,7 +11,7 @@ func TestDerefOrDefault(t *testing.T) {
 	if derefOrDefault(nil, "44") != "44" {
 		t.Errorf("expected 44, got %s", derefOrDefault(nil, ""))
 	}
-	if derefOrDefault(strPtr("777"), "44") != "777" {
+	if derefOrDefault(new("777"), "44") != "777" {
 		t.Errorf("expected 777, got %s", derefOrDefault(nil, ""))
 	}
 }

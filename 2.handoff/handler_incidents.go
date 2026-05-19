@@ -26,31 +26,13 @@ func marshalNewEntryEvent(incidentID string, entry TimelineEntry) json.RawMessag
 	return data
 }
 
-func marshalIncidentUpdateEvent(incidentID string, incBefore Incident, update IncidentUpdate) json.RawMessage {
+func marshalIncidentUpdateEvent(incAfter Incident) json.RawMessage {
 	event := struct {
-		Type       string `json:"type"`
-		IncidentID string `json:"incident_id"`
-		Field      string `json:"field"`
-		OldValue   string `json:"old_value"`
-		NewValue   string `json:"new_value"`
+		Type     string   `json:"type"`
+		Incident Incident `json:"incident"`
 	}{
-		Type:       "incident_updated",
-		IncidentID: incidentID,
-	}
-
-	switch {
-	case update.Status != nil:
-		event.Field = "status"
-		event.OldValue = incBefore.Status
-		event.NewValue = *update.Status
-	case update.Severity != nil:
-		event.Field = "severity"
-		event.OldValue = incBefore.Severity
-		event.NewValue = *update.Severity
-	case update.OnCall != nil:
-		event.Field = "on_call"
-		event.OldValue = incBefore.OnCall
-		event.NewValue = *update.OnCall
+		Type:     "incident_updated",
+		Incident: incAfter,
 	}
 
 	data, _ := json.Marshal(event)
@@ -239,7 +221,7 @@ func (incHandler *IncidentHandler) UpdateIncident(w http.ResponseWriter, r *http
 		return
 	}
 	incidentID := r.PathValue("id")
-	incBefore, err := incHandler.Store.UpdateIncident(r.Context(), incidentID, incidentUpdate)
+	incAfter, err := incHandler.Store.UpdateIncident(r.Context(), incidentID, incidentUpdate)
 	if err != nil {
 		if errors.Is(err, ErrIncidentNotFound) {
 			writeError(w, http.StatusNotFound, ErrorMessageJSON{
@@ -257,8 +239,8 @@ func (incHandler *IncidentHandler) UpdateIncident(w http.ResponseWriter, r *http
 		return
 	}
 	incHandler.Registry.broadcast <- BroadcastMessage{
+		msg:        marshalIncidentUpdateEvent(incAfter),
 		incidentID: incidentID,
-		msg:        marshalIncidentUpdateEvent(incidentID, incBefore, incidentUpdate),
 	}
 	w.WriteHeader(http.StatusNoContent)
 }
