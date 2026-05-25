@@ -28,24 +28,45 @@ func TestCreateFlag(t *testing.T) {
 	t.Run("test CreateFlag func", func(t *testing.T) {
 
 		t.Run("Create Flag Normally", func(t *testing.T) {
-			body, err := json.Marshal(validFeatureFlag())
-
-			if err != nil {
-				t.Fatal("can't Marshal FeatureFlag")
+			// create featureFlag1
+			featureFlag1 := validFeatureFlag()
+			body1, err1 := json.Marshal(featureFlag1)
+			if err1 != nil {
+				t.Fatal("can't Marshal FeatureFlag1")
 			}
 
-			req := httptest.NewRequest("POST", "/flags", bytes.NewReader(body))
-			appRes, err := flagHandler.CreateFlag(req)
+			req1 := httptest.NewRequest("POST", "/flags", bytes.NewReader(body1))
+			appRes1, err1 := flagHandler.CreateFlag(req1)
 
-			if err != nil {
-				t.Fatalf("expected no error, got error %v", err)
+			if err1 != nil {
+				t.Fatalf("expected no error, got error %v", err1)
 			}
-			if appRes.Status != http.StatusCreated {
-				t.Fatalf("expected status %v, got  %v", http.StatusCreated, appRes.Status)
+			if appRes1.Status != http.StatusCreated {
+				t.Fatalf("expected status %v, got  %v", http.StatusCreated, appRes1.Status)
 			}
-			f := appRes.Body.(FeatureFlag)
-			if f.Name != "test-feature-flag" {
-				t.Fatalf("expected FeatureFlag name %v, got %v", "test-feature-flag", f.Name)
+			f1 := appRes1.Body.(FeatureFlag)
+			if f1.Name != "test-feature-flag" {
+				t.Fatalf("expected FeatureFlag name %v, got %v", "test-feature-flag", f1.Name)
+			}
+
+			// create featureFlag2
+			featureFlag2 := validFeatureFlag()
+			featureFlag2.Name = "test-feature-flag-2"
+			body2, err2 := json.Marshal(featureFlag2)
+			if err2 != nil {
+				t.Fatal("can't Marshal FeatureFlag2")
+			}
+			req2 := httptest.NewRequest("POST", "/flags", bytes.NewReader(body2))
+			appRes2, err2 := flagHandler.CreateFlag(req2)
+			if err2 != nil {
+				t.Fatalf("expected no error, got error %v", err2)
+			}
+			if appRes2.Status != http.StatusCreated {
+				t.Fatalf("expected status %v, got  %v", http.StatusCreated, appRes2.Status)
+			}
+			f2 := appRes2.Body.(FeatureFlag)
+			if f2.Name != "test-feature-flag-2" {
+				t.Fatalf("expected FeatureFlag name %v, got %v", "test-feature-flag-2", f2.Name)
 			}
 		})
 
@@ -108,6 +129,40 @@ func TestCreateFlag(t *testing.T) {
 				t.Fatalf("expected status %v, got %v", http.StatusNoContent, appRes.Status)
 			}
 		})
+	})
+
+	t.Run("test ListAllFlag func", func(t *testing.T) {
+		req := httptest.NewRequest("GET", "/flags", nil)
+		appRes, err := flagHandler.ListAllFlag(req)
+		if err != nil {
+			t.Fatalf("expected no error, got %v", err)
+		}
+		if appRes.Status != http.StatusOK {
+			t.Fatalf("expected status %v, got %v", http.StatusOK, appRes.Status)
+		}
+		flags := appRes.Body.([]FeatureFlag)
+		if len(flags) != 2 {
+			t.Fatalf("expected flags_len %v, got %v", 2, len(flags))
+		}
+	})
+
+	t.Run("test Evaluate func", func(t *testing.T) {
+		featureFlag1 := validFeatureFlag()
+		req := httptest.NewRequest("GET", fmt.Sprintf("/flag/%v/evaluate?user_id=tom", featureFlag1.Name), nil)
+		req.SetPathValue("name", featureFlag1.Name)
+		appRes, err := flagHandler.Evaluate(req)
+		if err != nil {
+			t.Fatalf("expected no error, got %v", err)
+		}
+		if appRes.Status != http.StatusOK {
+			t.Fatalf("expected status %v, got %v", http.StatusOK, appRes.Status)
+		}
+		// raw, _ := json.MarshalIndent(appRes.Body, "", " ")
+		// fmt.Println(string(raw))
+		answer := appRes.Body.(*FlagEvaluateAnswer)
+		if answer.UserID != "tom" {
+			t.Fatalf("expected user_id %v, get %v", "tom", answer.UserID)
+		}
 	})
 
 }
