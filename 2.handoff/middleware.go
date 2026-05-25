@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/google/uuid"
@@ -62,7 +63,6 @@ func ObservabilityMiddleware(httpMetrics *HTTPMetrics) func(http.Handler) http.H
 	return func(nextHandler http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			start := time.Now()
-			httpMetrics.HTTPDurationSeconds.WithLabelValues("GET", "/incident")
 			wrappedWriter := &statusRecorder{ResponseWriter: w, StatusCode: 200}
 
 			defer func() {
@@ -98,8 +98,8 @@ func ObservabilityMiddleware(httpMetrics *HTTPMetrics) func(http.Handler) http.H
 					return
 				}
 
-				// httpRequestsTotal.WithLabelValues(r.Method, r.URL.Path, strconv.Itoa(wrappedWriter.StatusCode)).Inc()
-				// httpDurationSeconds.WithLabelValues(r.Method, r.URL.Path).Observe(duration.Seconds())
+				httpMetrics.HTTPRequestTotal.WithLabelValues(r.Method, r.URL.Path, strconv.Itoa(wrappedWriter.StatusCode)).Inc()
+				httpMetrics.HTTPDurationSeconds.WithLabelValues(r.Method, r.URL.Path).Observe(duration.Seconds())
 				slog.Info("request completed",
 					"method", r.Method,
 					"path", r.URL.Path,
@@ -108,6 +108,7 @@ func ObservabilityMiddleware(httpMetrics *HTTPMetrics) func(http.Handler) http.H
 					requestIDKey, requestID,
 				)
 			}()
+
 			nextHandler.ServeHTTP(wrappedWriter, r)
 		})
 	}

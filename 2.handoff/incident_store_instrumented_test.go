@@ -31,7 +31,7 @@ func validCreateIncidentRequest() CreateIncidentRequest {
 	}
 }
 
-func historySampleCount(instrumented *InstrumentedIncidentStore, lvs ...string) uint64 {
+func historyQueryDurationSampleCount(instrumented *InstrumentedIncidentStore, lvs ...string) uint64 {
 	observer := instrumented.metrics.DbQueryDurationSeconds.WithLabelValues(lvs...)
 	m := &dto.Metric{}
 	observer.(prometheus.Metric).Write(m)
@@ -59,7 +59,7 @@ func TestInstrumented(t *testing.T) {
 			}
 		})
 		t.Run("Observe Duration Histogram", func(t *testing.T) {
-			count := historySampleCount(instrumented, "create_incident")
+			count := historyQueryDurationSampleCount(instrumented, "create_incident")
 			if count != 2 {
 				t.Errorf("DbQueryDurationSeconds[create_incident] expected 2 inputs, got %v", count)
 			}
@@ -70,7 +70,7 @@ func TestInstrumented(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		count := historySampleCount(instrumented, "get_incident")
+		count := historyQueryDurationSampleCount(instrumented, "get_incident")
 		if count != 1 {
 			t.Errorf("DbQueryDurationSeconds[get_incident] expected 1 inputs, got %v", count)
 		}
@@ -90,7 +90,7 @@ func TestInstrumented(t *testing.T) {
 		if val != 1 {
 			t.Errorf("expected 1, got %v", val)
 		}
-		count := historySampleCount(instrumented, "add_entry")
+		count := historyQueryDurationSampleCount(instrumented, "add_entry")
 		if count != 1 {
 			t.Errorf("DbQueryDurationSeconds[add_entry] expected 1, got %v", count)
 		}
@@ -100,7 +100,7 @@ func TestInstrumented(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		count := historySampleCount(instrumented, "list_incident")
+		count := historyQueryDurationSampleCount(instrumented, "list_incident")
 		if count != 1 {
 			t.Errorf("DbQueryDurationSeconds[list_incident] expected 1, got %v", count)
 		}
@@ -110,7 +110,7 @@ func TestInstrumented(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		count := historySampleCount(instrumented, "update_incident")
+		count := historyQueryDurationSampleCount(instrumented, "update_incident")
 		if count != 1 {
 			t.Errorf("DbQueryDurationSeconds[update_incident] expected 1, got %v", count)
 		}
@@ -120,7 +120,7 @@ func TestInstrumented(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		count := historySampleCount(instrumented, "update_incident")
+		count := historyQueryDurationSampleCount(instrumented, "update_incident")
 		if count != 2 {
 			t.Errorf("DbQueryDurationSeconds[update_incident] expected 2, got %v", count)
 		}

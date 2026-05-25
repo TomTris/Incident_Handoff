@@ -7,6 +7,10 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
+
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/testutil"
 )
 
 func TestRequestIDMiddleware(t *testing.T) {
@@ -140,6 +144,68 @@ func TestResponseMiddleware(t *testing.T) {
 
 		if rec.Code != http.StatusInternalServerError {
 			t.Fatalf("expected code %v, get %v", http.StatusInternalServerError, rec.Code)
+		}
+	})
+}
+
+func TestObservabilityMiddleware(t *testing.T) {
+	testRequestID := "Test-Request-ID"
+	t.Run("Success: logging httpRequest and duration", func(t *testing.T) {
+		inner := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			time.Sleep(time.Duration(4 * time.Microsecond))
+			w.WriteHeader(http.StatusOK)
+		})
+		prompReg := prometheus.NewRegistry()
+		newHTTPMetrics := NewHttpMetrics(prompReg)
+		rec := httptest.NewRecorder()
+		rec.Header().Add("X-Request-ID", testRequestID)
+		// Send request 1
+		req1 := httptest.NewRequest("GET", "/", nil)
+		ctxWithNewRequestID := context.WithValue(req1.Context(), requestIDKey, testRequestID)
+		ObservabilityMiddleware(newHTTPMetrics)(inner).ServeHTTP(rec, req1.WithContext(ctxWithNewRequestID))
+
+		// Send request 2
+		req2 := httptest.NewRequest("GET", "/abc", nil)
+		ctxWithNewRequestID = context.WithValue(req2.Context(), requestIDKey, testRequestID)
+		ObservabilityMiddleware(newHTTPMetrics)(inner).ServeHTTP(rec, req2.WithContext(ctxWithNewRequestID))
+		ObservabilityMiddleware(newHTTPMetrics)(inner).ServeHTTP(rec, req2.WithContext(ctxWithNewRequestID))
+		ObservabilityMiddleware(newHTTPMetrics)(inner).ServeHTTP(rec, req2.WithContext(ctxWithNewRequestID))
+
+		// Evaluate
+		totalHTTPRequest := testutil.CollectAndCount(newHTTPMetrics.HTTPRequestTotal)
+		if totalHTTPRequest != 2 {
+			t.Fatalf("expected HTTPRequestTotal %v, %v", 2, totalHTTPRequest)
+		}
+
+		totaldbDurationQuerys := testutil.CollectAndCount(newHTTPMetrics.HTTPDurationSeconds)
+		if totaldbDurationQuerys != 2 {
+			t.Fatalf("expected HTTPRequestTotal %v, %v", 2, totaldbDurationQuerys)
+		}
+	})
+	t.Run("Server Panicked", func(t *testing.T) {
+		inner := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			panic("test panic")
+		})
+		prompReg := prometheus.NewRegistry()
+		newHTTPMetrics := NewHttpMetrics(prompReg)
+		rec := httptest.NewRecorder()
+		rec.Header().Add("X-Request-ID", testRequestID)
+		// Send request 1
+		req1 := httptest.NewRequest("GET", "/", nil)
+		ctxWithNewRequestID := context.WithValue(req1.Context(), requestIDKey, testRequestID)
+		ObservabilityMiddleware(newHTTPMetrics)(inner).ServeHTTP(rec, req1.WithContext(ctxWithNewRequestID))
+
+		// Evaluate
+		totalHTTPRequest := testutil.CollectAndCount(newHTTPMetrics.HTTPRequestTotal)
+		if totalHTTPRequest != 1 {
+			t.Fatalf("expected HTTPRequestTotal %v, %v", 1, totalHTTPRequest)
+		}
+		totaldbDurationQuerys := testutil.CollectAndCount(newHTTPMetrics.HTTPDurationSeconds)
+		if totaldbDurationQuerys != 1 {
+			t.Fatalf("expected HTTPRequestTotal %v, %v", 1, totaldbDurationQuerys)
+		}
+		if rec.Code != http.StatusInternalServerError {
+			t.Fatalf("expect code %v, get %v", http.StatusInternalServerError, rec.Code)
 		}
 	})
 }
