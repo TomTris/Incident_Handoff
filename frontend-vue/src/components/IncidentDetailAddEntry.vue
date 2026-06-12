@@ -1,20 +1,18 @@
 <script setup lang="ts">
-import type { Incident } from '@/types';
 import { ref } from 'vue'
 
 const props = defineProps<{
-    inc: Incident,
     err: string,
 }>()
 
 const entryType = ref('')
 const entryText = ref('')
 const emit = defineEmits<{
-    submit: [payload: {incidentID: string, type: string, text: string}]
+    submit: [payload: {type: string, text: string}]
 }>()
 
 async function onSubmit() {
-    emit("submit", {incidentID: props.inc.id, type: entryType.value, text: entryText.value})
+    emit("submit", {type: entryType.value, text: entryText.value})
 }
 </script>
 

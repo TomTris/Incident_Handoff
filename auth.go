@@ -17,9 +17,9 @@ type User struct {
 }
 
 type UserContext struct {
-	ID       string
-	Username string
-	Role     string
+	ID       string `json:"id"`
+	Username string `json:"username"`
+	Role     string `json:"role"`
 }
 
 type UserLogin struct {

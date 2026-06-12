@@ -18,11 +18,11 @@ function onSubmit() {
         <p v-if="error" class="error" role="alert">{{ error }}</p>
         <label>
             Username
-            <input v-model="username" type="text" required>
+            <input v-model="username" type="text"  autocomplete="username" required>
         </label>
         <label>
             Password
-            <input v-model="password" type="password" required>
+            <input v-model="password" type="password" autocomplete="current-password" required>
         </label>
         <button type="submit">Authenticate</button>
     </form>

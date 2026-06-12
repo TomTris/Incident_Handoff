@@ -61,7 +61,8 @@ export async function createIncident(input:CreateIncidentRequest) : Promise<Inci
 }
 
 export async function addEntry(incidentId: string, type: string, text:string) : Promise<TimelineEntry> {
-    return await request<TimelineEntry>("/api/incidents/"+incidentId+"/entries", {
+    console.log(incidentId)
+    return await request<TimelineEntry>(`/api/incidents/${incidentId}/entries`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({type, text}),
@@ -69,9 +70,16 @@ export async function addEntry(incidentId: string, type: string, text:string) : 
 }
 
 export async function getIncident(id : string) : Promise<Incident> {
-    return await request<Incident>("/api/incidents/"+id, undefined)
+    return await request<Incident>(`/api/incidents/${id}`, undefined)
 }
 
 export async function whoAmI() : Promise<UserContext> {
     return await request<UserContext>("/api/auth/me", undefined)
+}
+
+export async function updateIncident(id:string, payload: Record<string, string>) : Promise<void> {
+    return await request<void>(`/api/incidents/${id}`, {
+        method: "PATCH",
+        body: JSON.stringify(payload),
+    })
 }

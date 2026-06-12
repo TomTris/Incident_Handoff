@@ -1,19 +1,19 @@
 <script setup lang="ts">
-import { addEntry, getIncident, whoAmI } from '@/api';
+import { addEntry, getIncident, updateIncident, whoAmI } from '@/api';
 import IncidentDetailBrief from '@/components/IncidentDetailBrief.vue';
 import IncidentDetailAddEntry from '@/components/IncidentDetailAddEntry.vue';
 import IncidentDetailEntryList from '@/components/IncidentDetailEntryList.vue';
 import IncidentDetailHeader from '@/components/IncidentDetailHeader.vue';
-import type { Incident, TimelineEntry, TimelineEntryType, UserContext } from '@/types';
-import { onMounted, ref, watchEffect } from 'vue';
+import type { Incident, IncidentStatus, Severity, TimelineEntry, TimelineEntryType, UserContext } from '@/types';
+import { onMounted, ref, watchEffect, type Ref } from 'vue';
 import { useRoute } from 'vue-router';
 
 const route = useRoute()
-const inc = ref<Incident | null>(null)
+const inc = ref<Incident>() as Ref<Incident>
 const errIncidentLoadingMsg = ref('')
 const errWhoAmI = ref('')
 const errAddEntryMsg = ref('')
-const myIdentity = ref<UserContext>()
+const myIdentity = ref<UserContext>({ id: "", username: "", role: "" })
 
 onMounted(async() => {
     try {
@@ -21,9 +21,6 @@ onMounted(async() => {
     } catch (e) {
         errWhoAmI.value = (e as Error).message
     }
-})
-
-watchEffect(async () => {
     try {
         inc.value = await getIncident(route.params.id as string)
     } catch (e) {
@@ -31,10 +28,36 @@ watchEffect(async () => {
     }
 })
 
-async function handleAddEntry(payload: {incidentID: string, type:string, text:string}) {
+async function handleUpdateOnCall(payload: { key: string, value: string }) {
+    if (await runUpdate(payload) == true) {
+        inc.value.on_call = payload.value
+    }
+}
+async function handleUpdateSeverity(payload: { key: string, value: string }) {
+    await runUpdate(payload)
+    inc.value.severity = payload.value as Severity
+}
+async function handleUpdateStatus(payload: { key: string, value: string }) {
+    await runUpdate(payload)
+    inc.value.status = payload.value as IncidentStatus
+}
+
+async function runUpdate(payload: { key: string, value: string }) {
+    errIncidentLoadingMsg.value = ''
     try {
-        const newEntry = await addEntry(payload.incidentID, payload.type, payload.text)
-        inc.value?.entries.push(newEntry)
+        await updateIncident(inc.value.id, { [payload.key]: payload.value })
+        return true
+    } catch (e) {
+        errIncidentLoadingMsg.value = (e as Error).message
+        return false
+    }
+}
+
+async function handleAddEntry(payload: {type:string, text:string}) {
+    errAddEntryMsg.value = ''
+    try {
+        const newEntry = await addEntry(inc.value.id, payload.type, payload.text)
+        inc.value.entries.push(newEntry)
     } catch (e) {
         errAddEntryMsg.value = (e as Error).message
     }
@@ -44,7 +67,7 @@ async function handleAddEntry(payload: {incidentID: string, type:string, text:st
 <template>
     <RouterLink :to="{name: 'incidents'}">Back</RouterLink>
     
-    <div v-if="errIncidentLoadingMsg">
+<div v-if="errIncidentLoadingMsg">
         <p>Failed to load incident:</p>
         <p>{{ errIncidentLoadingMsg }}</p>
         <p>Please try again</p>
@@ -61,7 +84,9 @@ async function handleAddEntry(payload: {incidentID: string, type:string, text:st
                 :key="inc.id"
                 :inc="inc"
                 :myIdentity="myIdentity"
-                :currentOncall="inc.on_call"
+                @update-on-call="handleUpdateOnCall"
+                @update-severity="handleUpdateSeverity"
+                @update-status="handleUpdateStatus"
             />
         </div>
         
@@ -75,7 +100,6 @@ async function handleAddEntry(payload: {incidentID: string, type:string, text:st
         <div>
             <IncidentDetailAddEntry
                 :key="inc.id"
-                :inc="inc"
                 :err="errAddEntryMsg" 
                 @submit="handleAddEntry"
             />
